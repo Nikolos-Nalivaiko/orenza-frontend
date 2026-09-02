@@ -9,6 +9,7 @@ import {
   validateObjectForm,
   type ObjectForm,
 } from '../objects'
+import { emptyPayment } from '../finance'
 
 function makeForm(overrides: Partial<ObjectForm> = {}): ObjectForm {
   return {
@@ -86,6 +87,20 @@ describe('buildObjectPayload', () => {
       actual_finished_at: '2026-12-28',
       status: 'done',
     })
+  })
+
+  it('додає платежі замовника, коли вони є', () => {
+    const payload = buildObjectPayload(
+      makeForm({ payments: [{ ...emptyPayment(), name: 'Аванс', amount: '20000' }] }),
+    )
+
+    expect(payload).toMatchObject({
+      payments: [{ name: 'Аванс', amount: 20000, status: 'pending' }],
+    })
+  })
+
+  it('порожній список платежів на бекенд не їде', () => {
+    expect(buildObjectPayload(makeForm()).payments).toBeUndefined()
   })
 })
 

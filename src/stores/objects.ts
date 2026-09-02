@@ -9,6 +9,12 @@ import {
   type MaterialPayload,
 } from '@/lib/materials'
 import {
+  normalizePayment,
+  PAYMENT_STATUS_LABELS,
+  type Payment,
+  type PaymentPayload,
+} from '@/lib/finance'
+import {
   normalizeServiceWorker,
   SERVICE_STATUS_LABELS,
   type Service,
@@ -140,6 +146,18 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
+  /** Платіж у вигляді, у якому його поверне бекенд. */
+  function toPayment(payload: PaymentPayload, index: number): Payment {
+    return {
+      id: index + 1,
+      name: payload.name,
+      description: payload.description ?? null,
+      amount: payload.amount,
+      status: { value: payload.status, label: PAYMENT_STATUS_LABELS[payload.status] },
+      paid_at: payload.paid_at ?? null,
+    }
+  }
+
   async function create(form: ObjectForm): Promise<ConstructionObject | null> {
     const payload = buildObjectPayload(form)
 
@@ -176,6 +194,7 @@ export const useObjectsStore = defineStore('objects', () => {
       cover: payload.cover ?? null,
       materials: (payload.materials ?? []).map(toMaterial),
       services: (payload.services ?? []).map(toService),
+      payments: (payload.payments ?? []).map(toPayment),
       created_at: new Date().toISOString(),
     }
 
@@ -205,13 +224,15 @@ export const useObjectsStore = defineStore('objects', () => {
       // Ключі беремо з порожньої форми: старі чернетки не мають ламати екран.
       const draft = { ...emptyObjectForm(), ...(JSON.parse(raw) as Partial<ObjectForm>) }
 
-      // Виконавці колись були вписаним текстом, тепер — вибором зі списку.
+      // Виконавці колись були вписаним текстом, тепер — вибором зі списку,
+      // а фінансового блоку в старих чернетках не було взагалі.
       return {
         ...draft,
         services: draft.services.map((service) => ({
           ...service,
           workers: (service.workers ?? []).map(normalizeServiceWorker),
         })),
+        payments: (draft.payments ?? []).map(normalizePayment),
       }
     } catch {
       return null

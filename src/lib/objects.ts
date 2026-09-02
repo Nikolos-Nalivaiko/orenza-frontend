@@ -7,6 +7,12 @@
 
 import type { IconName } from '@/components/ui/icons'
 import {
+  buildPaymentPayload,
+  type Payment,
+  type PaymentForm,
+  type PaymentPayload,
+} from '@/lib/finance'
+import {
   buildMaterialPayload,
   type Material,
   type MaterialForm,
@@ -66,6 +72,7 @@ export interface ConstructionObject {
   cover: string | null
   materials: Material[]
   services: Service[]
+  payments: Payment[]
   created_at: string | null
 }
 
@@ -88,6 +95,8 @@ export interface ObjectForm {
   materials: MaterialForm[]
   /** Роботи по обʼєкту — третій блок картки. */
   services: ServiceForm[]
+  /** Платежі замовника — четвертий блок, фінанси: аванс, транші, доплата. */
+  payments: PaymentForm[]
 }
 
 export type ObjectErrors = Partial<Record<keyof ObjectForm, string>>
@@ -116,6 +125,7 @@ export function emptyObjectForm(): ObjectForm {
     cover: null,
     materials: [],
     services: [],
+    payments: [],
   }
 }
 
@@ -286,6 +296,7 @@ export interface ObjectPayload {
   cover?: string
   materials?: MaterialPayload[]
   services?: ServicePayload[]
+  payments?: PaymentPayload[]
 }
 
 export function buildObjectPayload(form: ObjectForm): ObjectPayload {
@@ -304,6 +315,7 @@ export function buildObjectPayload(form: ObjectForm): ObjectPayload {
     ...(form.cover === null ? {} : { cover: form.cover }),
     ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
     ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
+    ...(form.payments.length === 0 ? {} : { payments: form.payments.map(buildPaymentPayload) }),
   }
 }
 

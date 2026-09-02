@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } f
 import { RouterLink, useRouter } from 'vue-router'
 import ClientPicker from '@/components/objects/ClientPicker.vue'
 import CoverPicker from '@/components/objects/CoverPicker.vue'
+import FinancePanel from '@/components/objects/FinancePanel.vue'
 import MaterialsPanel from '@/components/objects/MaterialsPanel.vue'
 import ServicesPanel from '@/components/objects/ServicesPanel.vue'
 import StatusPicker from '@/components/objects/StatusPicker.vue'
@@ -22,12 +23,13 @@ import {
   type ObjectForm,
 } from '@/lib/objects'
 import { formatAmount } from '@/lib/amount'
+import { financeTotals, hasFinanceErrors, validateFinance, type FinanceErrors } from '@/lib/finance'
 import { validateMaterials, type MaterialErrors } from '@/lib/materials'
 import { servicesTotals, validateServices, type ServiceErrors } from '@/lib/services'
 import { useObjectsStore } from '@/stores/objects'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
-type TabKey = 'general' | 'materials' | 'services'
+type TabKey = 'general' | 'materials' | 'services' | 'finance'
 
 /**
  * Кнопки форми живуть у шапці екрана, поза самим <form>, тож звʼязок між ними
@@ -40,6 +42,7 @@ const TABS: readonly { key: TabKey; label: string }[] = [
   { key: 'general', label: 'Загальна інформація' },
   { key: 'materials', label: 'Матеріали' },
   { key: 'services', label: 'Послуги' },
+  { key: 'finance', label: 'Фінанси' },
 ]
 
 const router = useRouter()
@@ -52,6 +55,7 @@ const form = reactive<ObjectForm>(emptyObjectForm())
 const errors = ref<ObjectErrors>({})
 const materialErrors = ref<Record<string, MaterialErrors>>({})
 const serviceErrors = ref<Record<string, ServiceErrors>>({})
+const financeErrors = ref<FinanceErrors>({})
 
 const tab = ref<TabKey>('general')
 
@@ -66,6 +70,10 @@ function tabHasErrors(key: TabKey): boolean {
     return hasObjectErrors(errors.value)
   }
 
+  if (key === 'finance') {
+    return hasFinanceErrors(financeErrors.value)
+  }
+
   const map = key === 'materials' ? materialErrors.value : serviceErrors.value
 
   return Object.keys(map).length > 0
@@ -75,13 +83,18 @@ function tabHasErrors(key: TabKey): boolean {
 const solo = computed(() => workspaces.current?.type.value === 'personal')
 
 const servicesSummary = computed(() => servicesTotals(form.services))
+const money = computed(() => financeTotals(form))
 
 function tabCount(key: TabKey): number {
   if (key === 'materials') {
     return form.materials.length
   }
 
-  return key === 'services' ? form.services.length : 0
+  if (key === 'services') {
+    return form.services.length
+  }
+
+  return key === 'finance' ? form.payments.length : 0
 }
 
 const createdProfit = computed(() =>
@@ -119,6 +132,7 @@ watch(form, () => {
     errors.value = validateObjectForm(form)
     materialErrors.value = validateMaterials(form.materials)
     serviceErrors.value = validateServices(form.services)
+    financeErrors.value = validateFinance(form)
   }
 })
 
@@ -127,6 +141,7 @@ function resetForm(): void {
   errors.value = {}
   materialErrors.value = {}
   serviceErrors.value = {}
+  financeErrors.value = {}
   tab.value = 'general'
   submitted.value = false
   draftRestored.value = false
@@ -142,6 +157,7 @@ async function submit(): Promise<void> {
   errors.value = validateObjectForm(form)
   materialErrors.value = validateMaterials(form.materials)
   serviceErrors.value = validateServices(form.services)
+  financeErrors.value = validateFinance(form)
 
   const broken = TABS.find((item) => tabHasErrors(item.key))
 
@@ -247,6 +263,10 @@ async function toObjects(): Promise<void> {
               <template v-if="solo">дохід {{ formatAmount(servicesSummary.revenue) }} ₴</template>
               <template v-else>профіт {{ formatAmount(servicesSummary.profit) }} ₴</template>
             </dd>
+          </div>
+          <div v-if="money.client > 0">
+            <dt>Для клієнта</dt>
+            <dd>{{ formatAmount(money.client) }} ₴ · оплачено {{ formatAmount(money.paid) }} ₴</dd>
           </div>
         </dl>
 
@@ -437,6 +457,15 @@ async function toObjects(): Promise<void> {
 
         <section v-show="tab === 'services'" class="block block--plain">
           <ServicesPanel v-model="form.services" :errors="serviceErrors" :solo="solo" />
+        </section>
+
+        <section v-show="tab === 'finance'" class="block block--plain">
+          <FinancePanel
+            v-model="form.payments"
+            :materials="form.materials"
+            :services="form.services"
+            :errors="financeErrors"
+          />
         </section>
 
         <p class="form__note">Далі: етапи робіт і кошторис — вони зʼявляться всередині картки.</p>
