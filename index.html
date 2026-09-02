@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8">
+    <link rel="icon" href="/favicon.ico">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Orenza — CRM для будівельних компаній, підрядників і приватних майстрів.">
+    <meta name="theme-color" content="#0C110E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    >
+    <title>Orenza — CRM для будівельників</title>
+    <style>
+      /* Заставка до монтування застосунку: без неї перший кадр — біла спалахка. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 80;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 18px;
+        background: #f6f4ef;
+        transition: opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      #boot.is-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #boot .boot__mark {
+        display: grid;
+        place-items: center;
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+        background: #38b000;
+        color: #08210a;
+        animation: boot-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      }
+
+      #boot .boot__track {
+        width: 132px;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgb(12 17 14 / 8%);
+      }
+
+      #boot .boot__track span {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: inherit;
+        background: #38b000;
+        animation: boot-slide 1.25s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+      }
+
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          transform: scale(1);
+          box-shadow: 0 0 0 0 rgb(56 176 0 / 32%);
+        }
+
+        50% {
+          transform: scale(1.06);
+          box-shadow: 0 0 0 14px rgb(56 176 0 / 0%);
+        }
+      }
+
+      @keyframes boot-slide {
+        from {
+          transform: translateX(-110%);
+        }
+
+        to {
+          transform: translateX(360%);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #boot .boot__mark,
+        #boot .boot__track span {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <div id="boot" aria-hidden="true">
+      <span class="boot__mark">
+        <svg viewBox="0 0 28 28" fill="none" width="26" height="26">
+          <path d="M4 24V9.5L14 4l10 5.5V24" stroke="currentColor" stroke-width="2.4" />
+          <path d="M10 24v-7.5h8V24" stroke="currentColor" stroke-width="2.4" />
+          <circle cx="14" cy="11" r="1.9" fill="currentColor" />
+        </svg>
+      </span>
+      <span class="boot__track"><span></span></span>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

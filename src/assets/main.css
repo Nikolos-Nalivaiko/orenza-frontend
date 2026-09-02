@@ -1,0 +1,24 @@
+@import './base.css';
+
+#app {
+  min-height: 100dvh;
+  isolation: isolate;
+}
+
+/* Перехід між сторінками входу та реєстрації. */
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 0.28s var(--ease),
+    transform 0.28s var(--ease);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}

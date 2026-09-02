@@ -1,0 +1,354 @@
+/* Дизайн-токени Orenza. Зелений #38B000 — головний акцент, решта палітри
+   побудована навколо теплого паперового фону і графітової панелі. */
+
+:root {
+  --brand: #38b000;
+  --brand-strong: #2c8c00;
+  --brand-soft: #61cf30;
+  --brand-tint: #e8f7dd;
+  --brand-glow: rgb(56 176 0 / 22%);
+
+  --ink: #0c110e;
+  --ink-soft: #1a221c;
+  --ink-muted: #5c6660;
+  --ink-faint: #8b938d;
+
+  --paper: #f6f4ef;
+  --paper-raised: #fffefb;
+  --paper-sunk: #efece4;
+
+  --line: rgb(12 17 14 / 12%);
+  --line-strong: rgb(12 17 14 / 22%);
+
+  --danger: #c8341f;
+  --danger-tint: #fbe9e6;
+  --amber: #d99000;
+  --amber-tint: #fdf1d8;
+
+  /*
+   * Палітра графіків. Порядок слотів фіксований: саме для нього перевірено
+   * розрізнюваність при протанопії/дейтеранопії та контраст до паперу
+   * (найгірша сусідня пара — ΔE 24.7). Кольори призначаються слотами
+   * 1, 2, 3, 4 і ніколи не «прокручуються» по колу.
+   */
+  --c-1: #2c8c00;
+  --c-2: #4a3aa7;
+  --c-3: #eb6834;
+  --c-4: #2a78d6;
+  --c-1-soft: rgb(44 140 0 / 14%);
+  --c-2-soft: rgb(74 58 167 / 14%);
+  --c-3-soft: rgb(235 104 52 / 14%);
+  --c-4-soft: rgb(42 120 214 / 14%);
+
+  /* Сітка графіків має бути тихішою за дані. */
+  --grid: rgb(12 17 14 / 7%);
+
+  --sidebar-w: 262px;
+  --sidebar-rail: 76px;
+
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 24px;
+  --r-xl: 34px;
+
+  --shadow-sm: 0 1px 2px rgb(12 17 14 / 6%);
+  --shadow-md: 0 12px 30px -18px rgb(12 17 14 / 45%);
+  --shadow-lg: 0 40px 80px -50px rgb(12 17 14 / 70%);
+
+  --font-display: 'Unbounded', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  font-synthesis-weight: none;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Типографіка ───────────────────────────────────────────────── */
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+/* ── Кнопки ────────────────────────────────────────────────────── */
+
+.btn {
+  --btn-bg: transparent;
+  --btn-fg: var(--ink);
+  --btn-border: transparent;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 1px solid var(--btn-border);
+  border-radius: 999px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  transition:
+    transform 0.18s var(--ease),
+    box-shadow 0.25s var(--ease),
+    background-color 0.2s var(--ease),
+    border-color 0.2s var(--ease),
+    opacity 0.2s var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  --btn-bg: var(--brand);
+  --btn-fg: #08210a;
+
+  box-shadow: 0 14px 28px -16px var(--brand-glow);
+}
+
+.btn--primary:hover:not(:disabled) {
+  --btn-bg: var(--brand-soft);
+
+  box-shadow: 0 20px 34px -16px var(--brand-glow);
+}
+
+.btn--ink {
+  --btn-bg: var(--ink);
+  --btn-fg: #fff;
+}
+
+.btn--ghost {
+  --btn-border: var(--line-strong);
+  --btn-fg: var(--ink);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  --btn-border: var(--ink);
+
+  background: rgb(12 17 14 / 4%);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--sm {
+  min-height: 42px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* Стрілка, що виїжджає при наведенні. */
+.btn__arrow {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  transition: transform 0.25s var(--ease);
+}
+
+.btn:hover:not(:disabled) .btn__arrow {
+  transform: translateX(4px);
+}
+
+/* ── Компактні контроли ────────────────────────────────────────── */
+
+/*
+ * Поля всередині рядків списків (матеріали, послуги): нижчі за звичайні
+ * TextField, бо в рядку їх шість, а підпис несе шапка таблиці.
+ */
+.ctl {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--paper-raised);
+  font-size: 13.5px;
+  outline: none;
+  transition:
+    border-color 0.16s var(--ease),
+    box-shadow 0.16s var(--ease);
+}
+
+.ctl:hover {
+  border-color: var(--line-strong);
+}
+
+.ctl:focus {
+  border-color: rgb(56 176 0 / 55%);
+  box-shadow: 0 0 0 3px var(--brand-glow);
+}
+
+.ctl::placeholder {
+  color: var(--ink-faint);
+}
+
+.ctl--num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ctl--bad {
+  border-color: rgb(200 52 31 / 45%);
+  background: var(--danger-tint);
+}
+
+.ctl--select {
+  appearance: none;
+  padding-right: 24px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink-faint) 50%),
+    linear-gradient(135deg, var(--ink-faint) 50%, transparent 50%);
+  background-position:
+    right 12px center,
+    right 7px center;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+/* Дія над рядком: прибрати, замінити — тиха, поки на неї не навели. */
+.ctl-drop {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink-faint);
+  transition:
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.ctl-drop:hover {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+.ctl-drop .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ── Дрібниці ──────────────────────────────────────────────────── */
+
+.hairline {
+  height: 1px;
+  background: var(--line);
+  border: 0;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentcolor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
