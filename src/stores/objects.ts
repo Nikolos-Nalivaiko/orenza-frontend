@@ -31,6 +31,7 @@ import {
   type Client,
   type ConstructionObject,
   type ObjectForm,
+  type ObjectStatus,
 } from '@/lib/objects'
 
 /**
@@ -42,9 +43,17 @@ const CLIENTS_KEY = 'orenza.clients'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
 
+function readStorage(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
 function readList<T>(key: string, fallback: T[]): T[] {
   try {
-    const raw = localStorage.getItem(key)
+    const raw = readStorage(key)
 
     return raw === null ? fallback : (JSON.parse(raw) as T[])
   } catch {
@@ -84,6 +93,8 @@ export const useObjectsStore = defineStore('objects', () => {
   const clients = ref<Client[]>([])
 
   const isLoading = ref(true)
+  /** Список бодай раз доїхав: картку обʼєкта відкривають і прямим посиланням. */
+  const loaded = ref(false)
   const isLoadingClients = ref(true)
   const isSaving = ref(false)
   const error = ref<string | null>(null)
@@ -107,6 +118,17 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
+  /**
+   * Обкладинки — data-URL на кілька мегабайтів; у сховищі тримати їх немає
+   * сенсу, тож локальний список зберігаємо без них.
+   */
+  function persist(): void {
+    write(
+      STORAGE_KEY,
+      items.value.map((item) => ({ ...item, cover: null })),
+    )
+  }
+
   /** Стільки ж, скільки й у решті сторів: запит буде тут, дані — уже в формі. */
   async function fetchObjects(): Promise<void> {
     isLoading.value = true
@@ -115,13 +137,46 @@ export const useObjectsStore = defineStore('objects', () => {
       // TODO: GET /api/v1/workspaces/{id}/objects
       await progress.track(delay(460))
 
-      const stored = readList<ConstructionObject>(STORAGE_KEY, [])
+      const raw = readStorage(STORAGE_KEY)
       const workspaceId = workspaces.current?.id ?? null
 
-      items.value = workspaceId === null ? stored : [...demoObjects(workspaceId), ...stored]
+      // Демообʼєкти сіються один раз — далі вони звичайні записи, які можна
+      // редагувати, архівувати й видаляти, як і власні.
+      if (raw === null && workspaceId !== null) {
+        items.value = demoObjects(workspaceId)
+        persist()
+
+        return
+      }
+
+      items.value = readList<ConstructionObject>(STORAGE_KEY, [])
     } finally {
       isLoading.value = false
+      loaded.value = true
     }
+  }
+
+  function find(id: number): ConstructionObject | null {
+    return items.value.find((item) => item.id === id) ?? null
+  }
+
+  /** Точкова правка обʼєкта зі списку: статус, готовність, архів. */
+  function patch(id: number, changes: Partial<ConstructionObject>): void {
+    items.value = items.value.map((item) => (item.id === id ? { ...item, ...changes } : item))
+    persist()
+  }
+
+  function setStatus(id: number, value: ObjectStatus): void {
+    patch(id, { status: { value, label: OBJECT_STATUS_LABELS[value] } })
+  }
+
+  function setArchived(id: number, archived: boolean): void {
+    patch(id, { archived_at: archived ? new Date().toISOString() : null })
+  }
+
+  function remove(id: number): void {
+    items.value = items.value.filter((item) => item.id !== id)
+    persist()
   }
 
   function reset(): void {
@@ -253,17 +308,13 @@ export const useObjectsStore = defineStore('objects', () => {
       discount_percent: payload.discount_percent ?? null,
       discount_amount: payload.discount_amount ?? null,
       payments: (payload.payments ?? []).map(toPayment),
+      archived_at: null,
       created_at: new Date().toISOString(),
     }
 
     items.value = [...items.value, object]
 
-    // Обкладинки — data-URL на кілька мегабайтів; у сховищі тримати їх немає
-    // сенсу, тож локальний список зберігаємо без них.
-    write(
-      STORAGE_KEY,
-      [...own, object].map((item) => ({ ...item, cover: null })),
-    )
+    persist()
     clearDraft()
 
     return object
@@ -321,9 +372,14 @@ export const useObjectsStore = defineStore('objects', () => {
     isLoadingClients,
     isSaving,
     error,
+    loaded,
     reset,
     setView,
     fetchObjects,
+    find,
+    setStatus,
+    setArchived,
+    remove,
     findClient,
     fetchClients,
     addClient,

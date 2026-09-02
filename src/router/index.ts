@@ -61,6 +61,12 @@ const router = createRouter({
           meta: { title: 'Обʼєкти', subtitle: 'Усі будівельні обʼєкти простору' },
         },
         {
+          path: 'objects/:id(\\d+)',
+          name: 'object',
+          component: () => import('@/views/ObjectView.vue'),
+          meta: { title: 'Картка обʼєкта', section: 'objects' },
+        },
+        {
           path: 'objects/new',
           name: 'object-create',
           component: () => import('@/views/ObjectCreateView.vue'),

@@ -14,6 +14,7 @@ defineProps<{
   /** Замовники, у яких справді є обʼєкти. */
   clients: ClientOption[]
   counts: Record<ObjectStatus, number>
+  archived: number
   view: ObjectsView
   shown: number
   total: number
@@ -107,6 +108,19 @@ function isOn(value: ObjectStatus): boolean {
       >
         <AppIcon name="alert" />
         Тільки прострочені
+      </button>
+
+      <!-- Архів вмикається окремо: це інший режим списку, а не ще один статус. -->
+      <button
+        v-if="archived > 0 || filters.archived"
+        type="button"
+        class="chip"
+        :class="{ 'chip--on': filters.archived }"
+        :aria-pressed="filters.archived"
+        @click="filters.archived = !filters.archived"
+      >
+        Архів
+        <span class="chip__count">{{ archived }}</span>
       </button>
 
       <p class="bar__count">

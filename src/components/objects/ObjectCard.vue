@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
@@ -27,7 +28,11 @@ function percent(value: number): string {
     </div>
 
     <div class="ocard__body">
-      <h3 class="ocard__name">{{ row.object.name }}</h3>
+      <h3 class="ocard__name">
+        <RouterLink class="ocard__link" :to="{ name: 'object', params: { id: row.object.id } }">
+          {{ row.object.name }}
+        </RouterLink>
+      </h3>
 
       <p class="ocard__line">
         <AppIcon name="pin" />
@@ -80,6 +85,7 @@ function percent(value: number): string {
 
 <style scoped>
 .ocard {
+  position: relative;
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -137,6 +143,19 @@ function percent(value: number): string {
   align-content: start;
   gap: 8px;
   padding: 14px 16px 16px;
+}
+
+.ocard__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Клікабельна вся картка, але посилання лишається одне — на назві. */
+.ocard__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
 }
 
 .ocard__name {

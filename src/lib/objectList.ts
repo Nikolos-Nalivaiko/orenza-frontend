@@ -68,7 +68,10 @@ function discountOf(object: ConstructionObject, gross: number): number {
   return Math.round(gross * Math.min(object.discount_percent, 100)) / 100
 }
 
-/** Готовність рахуємо за обсягами робіт — вони єдині, що є в кожного обʼєкта. */
+/**
+ * Готовність рахуємо за роботами обʼєкта — руками її не виставляють: цифра,
+ * яку можна намалювати, нічого не варта.
+ */
 export function readiness(object: ConstructionObject): number | null {
   if (object.status.value === 'done') {
     return 1
@@ -88,6 +91,17 @@ export function readiness(object: ConstructionObject): number | null {
   }, 0)
 
   return clamp01(done / planned)
+}
+
+/** Скільки робіт уже закрито — підпис під готовністю: «3 з 7 робіт виконано». */
+export function servicesDone(object: ConstructionObject): { done: number; total: number } {
+  const done = object.services.filter(
+    (service) =>
+      service.status.value === 'done' ||
+      (service.planned_volume > 0 && (service.actual_volume ?? 0) >= service.planned_volume),
+  ).length
+
+  return { done, total: object.services.length }
 }
 
 export function objectSummary(object: ConstructionObject, today: string): ObjectSummary {
@@ -138,6 +152,8 @@ export interface ObjectFilters {
   statuses: ObjectStatus[]
   clientId: number | null
   overdueOnly: boolean
+  /** Архів лежить окремо: він не має розбавляти живі обʼєкти. */
+  archived: boolean
   sort: ObjectSort
 }
 
@@ -147,6 +163,7 @@ export function defaultObjectFilters(): ObjectFilters {
     statuses: [...ACTIVE_STATUSES],
     clientId: null,
     overdueOnly: false,
+    archived: false,
     sort: 'created',
   }
 }
@@ -158,6 +175,7 @@ export function isDefaultFilters(filters: ObjectFilters): boolean {
     filters.query.trim() === '' &&
     filters.clientId === null &&
     !filters.overdueOnly &&
+    !filters.archived &&
     filters.sort === base.sort &&
     filters.statuses.length === base.statuses.length &&
     base.statuses.every((status) => filters.statuses.includes(status))
@@ -211,6 +229,11 @@ export function buildObjectRows(
   today: string,
 ): ObjectRow[] {
   const rows = items.flatMap<ObjectRow>((object) => {
+    // Архів — окремий режим перегляду, а не ще один статус у загальній купі.
+    if (filters.archived !== (object.archived_at !== null)) {
+      return []
+    }
+
     if (filters.statuses.length > 0 && !filters.statuses.includes(object.status.value)) {
       return []
     }
@@ -241,10 +264,16 @@ export function countByStatus(items: ConstructionObject[]): Record<ObjectStatus,
   }
 
   for (const object of items) {
-    counts[object.status.value] += 1
+    if (object.archived_at === null) {
+      counts[object.status.value] += 1
+    }
   }
 
   return counts
+}
+
+export function countArchived(items: ConstructionObject[]): number {
+  return items.filter((object) => object.archived_at !== null).length
 }
 
 export interface ClientOption {

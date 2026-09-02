@@ -10,6 +10,7 @@ import { todayIso } from '@/lib/objects'
 import {
   buildObjectRows,
   clientsOf,
+  countArchived,
   countByStatus,
   defaultObjectFilters,
   type ObjectFilters,
@@ -27,6 +28,7 @@ const items = computed(() => objects.current)
 const rows = computed(() => buildObjectRows(items.value, filters.value, today))
 
 const counts = computed(() => countByStatus(items.value))
+const archived = computed(() => countArchived(items.value))
 const clients = computed(() => clientsOf(items.value))
 
 const late = computed(() => rows.value.filter((row) => row.summary.overdue).length)
@@ -80,6 +82,7 @@ function reset(): void {
       v-model="filters"
       :clients="clients"
       :counts="counts"
+      :archived="archived"
       :view="objects.view"
       :shown="rows.length"
       :total="items.length"

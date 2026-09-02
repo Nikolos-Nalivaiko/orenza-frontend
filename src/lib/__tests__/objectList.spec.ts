@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildObjectRows,
   clientsOf,
+  countArchived,
   countByStatus,
   defaultObjectFilters,
   formatDeadline,
@@ -9,6 +10,7 @@ import {
   matchesQuery,
   objectSummary,
   readiness,
+  servicesDone,
   type ObjectFilters,
 } from '../objectList'
 import { OBJECT_STATUS_LABELS, type Client, type ConstructionObject } from '../objects'
@@ -87,6 +89,7 @@ function makeObject(overrides: Partial<ConstructionObject> = {}): ConstructionOb
     discount_percent: null,
     discount_amount: null,
     payments: [payment()],
+    archived_at: null,
     created_at: '2026-06-01T09:00:00.000Z',
     ...overrides,
   }
@@ -165,6 +168,19 @@ describe('readiness', () => {
     expect(readiness(makeObject({ services: [done] }))).toBe(1)
   })
 
+  it('рахує, скільки робіт уже закрито', () => {
+    const object = makeObject({
+      services: [
+        service({ id: 1, status: { value: 'done', label: 'Виконано' } }),
+        service({ id: 2, actual_volume: 100 }),
+        service({ id: 3, actual_volume: 40 }),
+      ],
+    })
+
+    expect(servicesDone(object)).toEqual({ done: 2, total: 3 })
+    expect(servicesDone(makeObject({ services: [] }))).toEqual({ done: 0, total: 0 })
+  })
+
   it('завершений обʼєкт — завжди сто відсотків, без робіт — нічого', () => {
     const closed = makeObject({
       services: [],
@@ -198,6 +214,21 @@ describe('фільтри', () => {
     ]
 
     expect(buildObjectRows(items, filters({ statuses: [] }), TODAY)).toHaveLength(2)
+  })
+
+  it('архів живе окремо від живих обʼєктів', () => {
+    const items = [
+      makeObject({ id: 1 }),
+      makeObject({ id: 2, archived_at: '2026-09-01T10:00:00Z' }),
+    ]
+
+    expect(buildObjectRows(items, filters(), TODAY).map((row) => row.object.id)).toEqual([1])
+    expect(
+      buildObjectRows(items, filters({ archived: true }), TODAY).map((r) => r.object.id),
+    ).toEqual([2])
+    expect(isDefaultFilters(filters({ archived: true }))).toBe(false)
+    expect(countArchived(items)).toBe(1)
+    expect(countByStatus(items).in_progress).toBe(1)
   })
 
   it('пошук іде по назві, адресі та замовнику одночасно', () => {

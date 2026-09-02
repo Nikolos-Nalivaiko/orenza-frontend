@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import { formatAmount } from '@/lib/amount'
 import { formatDay } from '@/lib/objects'
@@ -25,7 +26,10 @@ function percent(value: number): string {
     <ul class="orows">
       <li v-for="{ object, summary } in rows" :key="object.id" class="orow">
         <div class="cell cell--name">
-          <p class="orow__name">{{ object.name }}</p>
+          <!-- Уся ідентифікація обʼєкта — одне посилання: клікати треба в назву. -->
+          <RouterLink class="orow__link" :to="{ name: 'object', params: { id: object.id } }">
+            {{ object.name }}
+          </RouterLink>
           <p class="orow__address">{{ object.address }}</p>
         </div>
 
@@ -114,6 +118,7 @@ function percent(value: number): string {
 }
 
 .orow {
+  position: relative;
   display: grid;
   grid-template-columns: var(--cols);
   align-items: center;
@@ -137,13 +142,27 @@ function percent(value: number): string {
   min-width: 0;
 }
 
-.orow__name {
+.orow__link {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.orow__link::after {
+  /* Клікабельний увесь рядок, але посилання лишається одне — на назві. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.orow__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .orow__address,

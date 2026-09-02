@@ -89,6 +89,8 @@ export interface ConstructionObject {
   discount_percent: number | null
   discount_amount: number | null
   payments: Payment[]
+  /** Архівований обʼєкт зникає зі списку, але лишається в історії. */
+  archived_at: string | null
   created_at: string | null
 }
 
@@ -487,6 +489,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
         payment(1, 'Аванс за етап', 600_000, 'paid', '2026-06-10'),
         payment(2, 'Транш за липень', 340_000, 'pending', '2026-09-20'),
       ],
+      archived_at: null,
       created_at: '2026-06-01T09:00:00.000Z',
     },
     {
@@ -507,6 +510,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: 3,
       discount_amount: null,
       payments: [payment(1, 'Аванс', 300_000, 'paid', '2026-05-18')],
+      archived_at: null,
       created_at: '2026-05-08T11:20:00.000Z',
     },
     {
@@ -527,6 +531,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: null,
       discount_amount: null,
       payments: [payment(1, 'Аванс', 120_000, 'paid', '2026-07-04')],
+      archived_at: null,
       created_at: '2026-06-28T08:40:00.000Z',
     },
     {
@@ -550,6 +555,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
         payment(1, 'Аванс', 200_000, 'paid', '2026-03-06'),
         payment(2, 'Розрахунок після здачі', 335_000, 'paid', '2026-08-25'),
       ],
+      archived_at: null,
       created_at: '2026-03-02T10:10:00.000Z',
     },
     {
@@ -570,6 +576,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: null,
       discount_amount: null,
       payments: [],
+      archived_at: null,
       created_at: '2026-08-30T14:05:00.000Z',
     },
   ]
