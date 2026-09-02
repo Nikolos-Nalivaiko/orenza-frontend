@@ -10,19 +10,24 @@ import { parseAmount } from '@/lib/amount'
 import {
   buildPaymentPayload,
   emptyDiscount,
+  PAYMENT_STATUS_LABELS,
   type DiscountForm,
   type Payment,
   type PaymentForm,
   type PaymentPayload,
+  type PaymentStatus,
 } from '@/lib/finance'
 import {
   buildMaterialPayload,
+  MATERIAL_BUYER_LABELS,
+  MATERIAL_STATUS_LABELS,
   type Material,
   type MaterialForm,
   type MaterialPayload,
 } from '@/lib/materials'
 import {
   buildServicePayload,
+  SERVICE_STATUS_LABELS,
   type Service,
   type ServiceForm,
   type ServicePayload,
@@ -374,3 +379,198 @@ export const DEMO_CLIENTS: readonly Client[] = [
   },
   { id: 5, name: 'Приватний замовник', contact: 'Без компанії', phone: '', discount: 0 },
 ]
+
+/**
+ * Демообʼєкти. Поки немає ендпоінта, порожній простір показував би порожній
+ * список — а він якраз і має пояснити, як екран виглядає в роботі. Id з
+ * власного діапазону: у сховище вони не пишуться й не займають місце
+ * створеним обʼєктам.
+ */
+export const DEMO_OBJECT_ID_FROM = 9000
+
+export function isDemoObject(id: number): boolean {
+  return id >= DEMO_OBJECT_ID_FROM
+}
+
+function client(id: number): Client | null {
+  return DEMO_CLIENTS.find((item) => item.id === id) ?? null
+}
+
+function status(value: ObjectStatus): { value: ObjectStatus; label: string } {
+  return { value, label: OBJECT_STATUS_LABELS[value] }
+}
+
+function material(
+  id: number,
+  name: string,
+  unit: string,
+  quantity: number,
+  cost: number,
+  price: number,
+): Material {
+  return {
+    id,
+    name,
+    unit,
+    quantity,
+    buyer: { value: 'contractor', label: MATERIAL_BUYER_LABELS.contractor },
+    cost_price: cost,
+    client_price: price,
+    status: { value: 'delivered', label: MATERIAL_STATUS_LABELS.delivered },
+    approved_by_client: true,
+  }
+}
+
+function service(
+  id: number,
+  name: string,
+  unit: string,
+  planned: number,
+  actual: number | null,
+  price: number,
+  wage: number,
+): Service {
+  const done = actual !== null && actual >= planned
+
+  return {
+    id,
+    name,
+    description: null,
+    unit,
+    planned_volume: planned,
+    actual_volume: actual,
+    client_price: price,
+    status: done
+      ? { value: 'done', label: SERVICE_STATUS_LABELS.done }
+      : { value: 'in_progress', label: SERVICE_STATUS_LABELS.in_progress },
+    workers: [{ employee_id: id, volume: actual ?? planned, rate: wage }],
+  }
+}
+
+function payment(
+  id: number,
+  name: string,
+  amount: number,
+  value: PaymentStatus,
+  paidAt: string | null,
+): Payment {
+  return {
+    id,
+    name,
+    description: null,
+    amount,
+    status: { value, label: PAYMENT_STATUS_LABELS[value] },
+    paid_at: paidAt,
+  }
+}
+
+export function demoObjects(workspaceId: number): ConstructionObject[] {
+  return [
+    {
+      id: 9001,
+      workspace_id: workspaceId,
+      name: 'ЖК «Пасаж», 3 черга',
+      description: 'Монолітний каркас і зовнішні стіни третьої черги.',
+      address: 'вул. Стеценка, 12 · Київ',
+      client: client(1),
+      status: status('in_progress'),
+      started_at: '2026-06-02',
+      finished_at: '2026-10-14',
+      actual_started_at: '2026-06-08',
+      actual_finished_at: null,
+      cover: null,
+      materials: [material(1, 'Бетон В25', 'м³', 320, 3100, 3600)],
+      services: [service(1, 'Монолітні роботи', 'м³', 320, 214, 1450, 620)],
+      discount_percent: 5,
+      discount_amount: null,
+      payments: [
+        payment(1, 'Аванс за етап', 600_000, 'paid', '2026-06-10'),
+        payment(2, 'Транш за липень', 340_000, 'pending', '2026-09-20'),
+      ],
+      created_at: '2026-06-01T09:00:00.000Z',
+    },
+    {
+      id: 9002,
+      workspace_id: workspaceId,
+      name: 'Котеджне містечко «Липки»',
+      description: null,
+      address: 'с. Гатне · Київська обл.',
+      client: client(3),
+      status: status('in_progress'),
+      started_at: '2026-05-12',
+      finished_at: '2026-08-28',
+      actual_started_at: '2026-05-20',
+      actual_finished_at: null,
+      cover: null,
+      materials: [material(1, 'Металочерепиця', 'м²', 1400, 420, 520)],
+      services: [service(1, 'Покрівельні роботи', 'м²', 1400, 580, 380, 160)],
+      discount_percent: 3,
+      discount_amount: null,
+      payments: [payment(1, 'Аванс', 300_000, 'paid', '2026-05-18')],
+      created_at: '2026-05-08T11:20:00.000Z',
+    },
+    {
+      id: 9003,
+      workspace_id: workspaceId,
+      name: 'Офіс «Кварц», 4 поверх',
+      description: null,
+      address: 'просп. Науки, 54 · Харків',
+      client: client(2),
+      status: status('paused'),
+      started_at: '2026-07-01',
+      finished_at: '2026-09-28',
+      actual_started_at: '2026-07-06',
+      actual_finished_at: null,
+      cover: null,
+      materials: [material(1, 'Гіпсокартон', 'лист', 460, 340, 390)],
+      services: [service(1, 'Оздоблення', 'м²', 240, 96, 640, 320)],
+      discount_percent: null,
+      discount_amount: null,
+      payments: [payment(1, 'Аванс', 120_000, 'paid', '2026-07-04')],
+      created_at: '2026-06-28T08:40:00.000Z',
+    },
+    {
+      id: 9004,
+      workspace_id: workspaceId,
+      name: 'Реконструкція складу №4',
+      description: null,
+      address: 'вул. Промислова, 8 · Львів',
+      client: client(4),
+      status: status('done'),
+      started_at: '2026-03-04',
+      finished_at: '2026-08-19',
+      actual_started_at: '2026-03-11',
+      actual_finished_at: '2026-08-21',
+      cover: null,
+      materials: [material(1, 'Профнастил', 'м²', 900, 310, 380)],
+      services: [service(1, 'Демонтаж і монтаж', 'м²', 900, 900, 260, 110)],
+      discount_percent: 7,
+      discount_amount: null,
+      payments: [
+        payment(1, 'Аванс', 200_000, 'paid', '2026-03-06'),
+        payment(2, 'Розрахунок після здачі', 335_000, 'paid', '2026-08-25'),
+      ],
+      created_at: '2026-03-02T10:10:00.000Z',
+    },
+    {
+      id: 9005,
+      workspace_id: workspaceId,
+      name: 'Ремонт покрівлі школи №12',
+      description: null,
+      address: 'вул. Шкільна, 4 · Бровари',
+      client: null,
+      status: status('planned'),
+      started_at: '2026-10-05',
+      finished_at: '2026-11-30',
+      actual_started_at: null,
+      actual_finished_at: null,
+      cover: null,
+      materials: [],
+      services: [],
+      discount_percent: null,
+      discount_amount: null,
+      payments: [],
+      created_at: '2026-08-30T14:05:00.000Z',
+    },
+  ]
+}

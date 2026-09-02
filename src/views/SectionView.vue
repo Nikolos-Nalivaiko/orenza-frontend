@@ -10,11 +10,6 @@ import { findNavItem } from '@/lib/navigation'
  * не в нікуди, а на опис того, що тут зʼявиться.
  */
 const PLANS: Record<string, string[]> = {
-  objects: [
-    'Картка обʼєкта: адреса, замовник, відповідальний, статус',
-    'Етапи робіт із термінами та відсотком виконання',
-    'Фото з майданчика та журнал робіт по днях',
-  ],
   estimates: [
     'Позиції матеріалів і робіт з одиницями та цінами',
     'Версії кошторису та історія змін по кожному рядку',
@@ -52,16 +47,10 @@ const PLANS: Record<string, string[]> = {
   ],
 }
 
-/** Розділи, у яких уже є робочий екран, — заглушка веде на нього, а не в нікуди. */
-const ACTIONS: Record<string, { name: string; label: string }> = {
-  objects: { name: 'object-create', label: 'Створити обʼєкт' },
-}
-
 const route = useRoute()
 
 const item = computed(() => findNavItem(String(route.name)))
 const plans = computed(() => PLANS[String(route.name)] ?? [])
-const action = computed(() => ACTIONS[String(route.name)] ?? null)
 </script>
 
 <template>
@@ -86,24 +75,6 @@ const action = computed(() => ACTIONS[String(route.name)] ?? null)
       </ul>
 
       <div class="soon__actions">
-        <RouterLink
-          v-if="action"
-          class="btn btn--primary btn--sm soon__cta"
-          :to="{ name: action.name }"
-        >
-          <span>{{ action.label }}</span>
-          <svg class="btn__arrow" viewBox="0 0 18 18" aria-hidden="true">
-            <path
-              d="M3.5 9h11M10 4.5 14.5 9 10 13.5"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-        </RouterLink>
-
         <RouterLink class="btn btn--ghost btn--sm soon__back" :to="{ name: 'dashboard' }">
           Повернутись на дашборд
         </RouterLink>

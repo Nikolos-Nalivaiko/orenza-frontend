@@ -29,7 +29,7 @@ export const NAV: NavGroup[] = [
   {
     title: 'Робота',
     items: [
-      { name: 'objects', label: 'Обʼєкти', icon: 'building', soon: true },
+      { name: 'objects', label: 'Обʼєкти', icon: 'building' },
       { name: 'estimates', label: 'Кошториси', icon: 'estimate', soon: true },
       { name: 'schedule', label: 'Графік робіт', icon: 'calendar', soon: true },
       { name: 'materials', label: 'Матеріали', icon: 'box', soon: true },

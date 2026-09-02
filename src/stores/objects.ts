@@ -24,7 +24,9 @@ import {
 import {
   buildObjectPayload,
   DEMO_CLIENTS,
+  demoObjects,
   emptyObjectForm,
+  isDemoObject,
   OBJECT_STATUS_LABELS,
   type Client,
   type ConstructionObject,
@@ -38,6 +40,7 @@ import {
 const STORAGE_KEY = 'orenza.objects'
 const CLIENTS_KEY = 'orenza.clients'
 const DRAFT_KEY = 'orenza.objects.draft'
+const VIEW_KEY = 'orenza.objects.view'
 
 function readList<T>(key: string, fallback: T[]): T[] {
   try {
@@ -62,6 +65,17 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Таблиця чи картки — вибір людини, тож переживає перезавантаження. */
+export type ObjectsView = 'table' | 'cards'
+
+function readView(): ObjectsView {
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'table'
+  } catch {
+    return 'table'
+  }
+}
+
 export const useObjectsStore = defineStore('objects', () => {
   const progress = useProgressStore()
   const workspaces = useWorkspacesStore()
@@ -69,11 +83,46 @@ export const useObjectsStore = defineStore('objects', () => {
   const items = ref<ConstructionObject[]>(readList<ConstructionObject>(STORAGE_KEY, []))
   const clients = ref<Client[]>([])
 
+  const isLoading = ref(true)
   const isLoadingClients = ref(true)
   const isSaving = ref(false)
   const error = ref<string | null>(null)
 
+  const view = ref<ObjectsView>(readView())
+
   const count = computed(() => items.value.length)
+
+  /** Обʼєкти поточного простору — саме їх показує список. */
+  const current = computed(() =>
+    items.value.filter((item) => item.workspace_id === workspaces.current?.id),
+  )
+
+  function setView(next: ObjectsView): void {
+    view.value = next
+
+    try {
+      localStorage.setItem(VIEW_KEY, next)
+    } catch {
+      // див. write()
+    }
+  }
+
+  /** Стільки ж, скільки й у решті сторів: запит буде тут, дані — уже в формі. */
+  async function fetchObjects(): Promise<void> {
+    isLoading.value = true
+
+    try {
+      // TODO: GET /api/v1/workspaces/{id}/objects
+      await progress.track(delay(460))
+
+      const stored = readList<ConstructionObject>(STORAGE_KEY, [])
+      const workspaceId = workspaces.current?.id ?? null
+
+      items.value = workspaceId === null ? stored : [...demoObjects(workspaceId), ...stored]
+    } finally {
+      isLoading.value = false
+    }
+  }
 
   function reset(): void {
     error.value = null
@@ -182,8 +231,12 @@ export const useObjectsStore = defineStore('objects', () => {
       return null
     }
 
+    // Демообʼєкти живуть у власному діапазоні id — нумерацію створених вони
+    // не зсувають.
+    const own = items.value.filter((item) => !isDemoObject(item.id))
+
     const object: ConstructionObject = {
-      id: Math.max(0, ...items.value.map((item) => item.id)) + 1,
+      id: Math.max(0, ...own.map((item) => item.id)) + 1,
       workspace_id: workspaceId,
       name: payload.name,
       description: payload.description ?? null,
@@ -209,7 +262,7 @@ export const useObjectsStore = defineStore('objects', () => {
     // сенсу, тож локальний список зберігаємо без них.
     write(
       STORAGE_KEY,
-      items.value.map((item) => ({ ...item, cover: null })),
+      [...own, object].map((item) => ({ ...item, cover: null })),
     )
     clearDraft()
 
@@ -260,12 +313,17 @@ export const useObjectsStore = defineStore('objects', () => {
 
   return {
     items,
+    current,
     clients,
     count,
+    view,
+    isLoading,
     isLoadingClients,
     isSaving,
     error,
     reset,
+    setView,
+    fetchObjects,
     findClient,
     fetchClients,
     addClient,

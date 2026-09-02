@@ -9,8 +9,11 @@ import LoginView from '@/views/LoginView.vue'
  * Розділи, яких ще немає на бекенді, ведуть на спільну заглушку — але це
  * справжні маршрути: адреса, заголовок і активний пункт меню працюють.
  */
+/** Розділи з власним екраном — заглушка їх не стосується. */
+const READY = ['dashboard', 'objects']
+
 const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
-  .filter((item) => item.name !== 'dashboard')
+  .filter((item) => !READY.includes(item.name))
   .map((item) => ({
     path: item.name,
     name: item.name,
@@ -50,6 +53,12 @@ const router = createRouter({
           name: 'dashboard',
           component: () => import('@/views/DashboardView.vue'),
           meta: { title: 'Дашборд', subtitle: 'Обʼєкти, гроші та команда за обраний період' },
+        },
+        {
+          path: 'objects',
+          name: 'objects',
+          component: () => import('@/views/ObjectsView.vue'),
+          meta: { title: 'Обʼєкти', subtitle: 'Усі будівельні обʼєкти простору' },
         },
         {
           path: 'objects/new',
