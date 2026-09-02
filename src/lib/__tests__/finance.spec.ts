@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPaymentPayload,
+  clientDiscount,
+  discountAmount,
+  emptyDiscount,
   emptyPayment,
   financeTotals,
+  normalizeDiscount,
   hasFinanceErrors,
   isLate,
   paymentsTotals,
   validateFinance,
   validatePayment,
+  type DiscountForm,
   type FinanceInput,
   type PaymentForm,
 } from '../finance'
@@ -33,9 +38,47 @@ function makeService(overrides: Partial<ServiceForm> = {}): ServiceForm {
   return { ...emptyService(), name: 'Мурування', planVolume: '50', price: '400', ...overrides }
 }
 
-function makeInput(overrides: Partial<FinanceInput> = {}): FinanceInput {
-  return { materials: [makeMaterial()], services: [makeService()], payments: [], ...overrides }
+function makeDiscount(overrides: Partial<DiscountForm> = {}): DiscountForm {
+  return { ...emptyDiscount(), ...overrides }
 }
+
+function makeInput(overrides: Partial<FinanceInput> = {}): FinanceInput {
+  return {
+    materials: [makeMaterial()],
+    services: [makeService()],
+    discount: makeDiscount(),
+    payments: [],
+    ...overrides,
+  }
+}
+
+describe('знижка', () => {
+  it('відсоток рахується від суми матеріалів і робіт', () => {
+    expect(discountAmount(makeDiscount({ value: '5' }), 23000)).toBe(1150)
+    expect(discountAmount(makeDiscount({ value: '0' }), 23000)).toBe(0)
+    expect(discountAmount(makeDiscount({ value: '' }), 23000)).toBe(0)
+  })
+
+  it('сума береться як є, але не більша за саму суму обʼєкта', () => {
+    expect(discountAmount(makeDiscount({ kind: 'amount', value: '1 500' }), 23000)).toBe(1500)
+    expect(discountAmount(makeDiscount({ kind: 'amount', value: '99000' }), 23000)).toBe(23000)
+    expect(discountAmount(makeDiscount({ value: '150' }), 23000)).toBe(23000)
+  })
+
+  it('знижка замовника приходить відсотком і лишається привʼязаною до нього', () => {
+    expect(clientDiscount(5)).toEqual({ kind: 'percent', value: '5', fromClient: true })
+    expect(clientDiscount(0)).toEqual({ kind: 'percent', value: '', fromClient: true })
+  })
+
+  it('чернетка без знижки дає порожню знижку обʼєкта', () => {
+    expect(normalizeDiscount(undefined)).toEqual(emptyDiscount())
+    expect(normalizeDiscount({ value: '7', fromClient: false })).toEqual({
+      kind: 'percent',
+      value: '7',
+      fromClient: false,
+    })
+  })
+})
 
 describe('paymentsTotals', () => {
   it('розкладає платежі за статусами', () => {
@@ -66,12 +109,26 @@ describe('isLate', () => {
 })
 
 describe('financeTotals', () => {
-  it('складає суму для клієнта з матеріалів і робіт', () => {
+  it('складає суму для клієнта з матеріалів і робіт, мінус знижка', () => {
     const totals = financeTotals(makeInput())
 
     expect(totals.materials).toBe(100 * 30)
     expect(totals.services).toBe(50 * 400)
-    expect(totals.client).toBe(3000 + 20000)
+    expect(totals.gross).toBe(3000 + 20000)
+    expect(totals.client).toBe(23000)
+
+    const withDiscount = financeTotals(makeInput({ discount: makeDiscount({ value: '5' }) }))
+
+    expect(withDiscount.discount).toBe(1150)
+    expect(withDiscount.client).toBe(23000 - 1150)
+  })
+
+  it('знижка зменшує профіт, бо собівартість від неї не змінюється', () => {
+    const plain = financeTotals(makeInput())
+    const discounted = financeTotals(makeInput({ discount: makeDiscount({ value: '10' }) }))
+
+    expect(discounted.cost).toBe(plain.cost)
+    expect(discounted.profit).toBe(plain.profit - 2300)
   })
 
   it('профіт — одна цифра: сума для клієнта мінус собівартість', () => {
@@ -141,6 +198,25 @@ describe('validateFinance', () => {
 
     expect(errors).toEqual({})
     expect(hasFinanceErrors(errors)).toBe(false)
+  })
+
+  it('стереже межі знижки: сто відсотків і сума обʼєкта', () => {
+    expect(
+      validateFinance(makeInput({ discount: makeDiscount({ value: '100' }) })).discount,
+    ).toBeUndefined()
+    expect(
+      validateFinance(makeInput({ discount: makeDiscount({ value: '101' }) })).discount,
+    ).toBeDefined()
+    expect(
+      validateFinance(makeInput({ discount: makeDiscount({ kind: 'amount', value: '23001' }) }))
+        .discount,
+    ).toBeDefined()
+    expect(
+      validateFinance(makeInput({ discount: makeDiscount({ value: '-1' }) })).discount,
+    ).toBeDefined()
+    expect(
+      validateFinance(makeInput({ discount: makeDiscount({ value: 'трохи' }) })).discount,
+    ).toBeDefined()
   })
 
   it('збирає помилки по платежах і пропускає справні', () => {

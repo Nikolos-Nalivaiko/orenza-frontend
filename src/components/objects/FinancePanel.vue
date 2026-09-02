@@ -4,8 +4,12 @@ import PaymentRow from '@/components/objects/PaymentRow.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
 import {
+  clientDiscount,
+  DISCOUNT_KIND_LABELS,
   emptyPayment,
   financeTotals,
+  type DiscountForm,
+  type DiscountKind,
   type FinanceErrors,
   type PaymentErrors,
   type PaymentForm,
@@ -17,10 +21,13 @@ const props = defineProps<{
   /** Матеріали й роботи фінанси лише читають — редагують їх у своїх вкладках. */
   materials: MaterialForm[]
   services: ServiceForm[]
+  /** Персональна знижка обраного замовника, % — нуль, якщо її немає. */
+  clientPercent: number
   errors: FinanceErrors
 }>()
 
 const payments = defineModel<PaymentForm[]>({ required: true })
+const discount = defineModel<DiscountForm>('discount', { required: true })
 
 const root = useTemplateRef<HTMLElement>('root')
 
@@ -28,9 +35,13 @@ const totals = computed(() =>
   financeTotals({
     materials: props.materials,
     services: props.services,
+    discount: discount.value,
     payments: payments.value,
   }),
 )
+
+/** Знижка досі та сама, що в замовника, — і їде за ним при зміні клієнта. */
+const inherited = computed(() => discount.value.fromClient && props.clientPercent > 0)
 
 const isEmpty = computed(() => payments.value.length === 0)
 
@@ -41,6 +52,26 @@ const percent = computed(() => Math.round(totals.value.progress * 100))
 
 function errorsFor(id: string): PaymentErrors | undefined {
   return props.errors.payments?.[id]
+}
+
+/**
+ * Щойно знижку правлять руками, вона стає знижкою обʼєкта: зміна замовника
+ * її вже не перепише.
+ */
+function onValue(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+
+  discount.value = { ...discount.value, value, fromClient: false }
+}
+
+function onKind(event: Event): void {
+  const kind = (event.target as HTMLSelectElement).value as DiscountKind
+
+  discount.value = { ...discount.value, kind, fromClient: false }
+}
+
+function restore(): void {
+  discount.value = clientDiscount(props.clientPercent)
 }
 
 async function add(): Promise<void> {
@@ -66,6 +97,9 @@ function remove(id: string): void {
         <p class="tile__foot">
           матеріали {{ formatAmount(totals.materials) }} + роботи
           {{ formatAmount(totals.services) }}
+          <template v-if="totals.discount > 0">
+            − знижка {{ formatAmount(totals.discount) }}
+          </template>
         </p>
       </div>
 
@@ -104,6 +138,48 @@ function remove(id: string): void {
         <p v-else class="tile__foot">платежів у роботі немає</p>
       </div>
     </dl>
+
+    <!-- Знижка обʼєкта. Персональна знижка замовника лише підставляє сюди
+         значення — рахується завжди те, що стоїть у цьому полі. -->
+    <section class="disc">
+      <span class="disc__icon" aria-hidden="true"><AppIcon name="spark" /></span>
+
+      <h3 class="disc__title">Знижка</h3>
+
+      <select
+        class="ctl ctl--select disc__kind"
+        aria-label="Тип знижки"
+        :value="discount.kind"
+        @change="onKind"
+      >
+        <option v-for="(label, value) in DISCOUNT_KIND_LABELS" :key="value" :value="value">
+          {{ label }}
+        </option>
+      </select>
+
+      <input
+        class="ctl ctl--num disc__value"
+        :class="{ 'ctl--bad': errors.discount }"
+        type="text"
+        inputmode="decimal"
+        aria-label="Розмір знижки"
+        placeholder="0"
+        :value="discount.value"
+        @input="onValue"
+      />
+
+      <!-- Скільки це в гривнях — видно лише там, де відсоток сам по собі не відповідь. -->
+      <p v-if="discount.kind === 'percent' && totals.discount > 0" class="disc__sum">
+        − {{ formatAmount(totals.discount) }} ₴
+      </p>
+
+      <span v-if="inherited" class="disc__chip">від замовника</span>
+      <button v-else-if="clientPercent > 0" type="button" class="disc__restore" @click="restore">
+        Повернути {{ clientPercent }}% замовника
+      </button>
+
+      <p v-if="errors.discount" class="disc__bad">{{ errors.discount }}</p>
+    </section>
 
     <section class="pays">
       <header class="pays__head">
@@ -285,6 +361,81 @@ function remove(id: string): void {
   transition: width 0.35s var(--ease);
 }
 
+/* ── Знижка ────────────────────────────────────────────────────── */
+
+/* Уся знижка — один рядок: заголовок, поле, результат і звідки вона взялась. */
+.disc {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.disc__title {
+  margin-right: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Звідки взялась цифра — видно, не відкриваючи картку замовника. */
+.disc__chip {
+  margin-left: auto;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.disc__restore {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition:
+    border-color 0.18s var(--ease),
+    background-color 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+
+.disc__restore:hover {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.disc__kind {
+  width: 72px;
+  flex: none;
+}
+
+.disc__value {
+  width: 118px;
+  flex: none;
+}
+
+.disc__sum {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--brand-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Помилка стає окремим рядком — поля не мають через неї стрибати. */
+.disc__bad {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--danger);
+}
+
 /* ── Платежі ───────────────────────────────────────────────────── */
 
 .pays {
@@ -300,6 +451,7 @@ function remove(id: string): void {
   gap: 9px;
 }
 
+.disc__icon,
 .pays__icon {
   display: grid;
   place-items: center;
@@ -310,6 +462,7 @@ function remove(id: string): void {
   color: var(--brand-strong);
 }
 
+.disc__icon :deep(.icon),
 .pays__icon :deep(.icon) {
   width: 16px;
   height: 16px;

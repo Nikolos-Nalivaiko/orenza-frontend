@@ -9,6 +9,7 @@ import {
   type MaterialPayload,
 } from '@/lib/materials'
 import {
+  normalizeDiscount,
   normalizePayment,
   PAYMENT_STATUS_LABELS,
   type Payment,
@@ -105,6 +106,8 @@ export const useObjectsStore = defineStore('objects', () => {
       name: name.trim(),
       contact: 'Створено з картки обʼєкта',
       phone: '',
+      // Персональну знижку заводять у довіднику замовників, не з форми обʼєкта.
+      discount: 0,
     }
 
     clients.value = [...clients.value, client]
@@ -194,6 +197,8 @@ export const useObjectsStore = defineStore('objects', () => {
       cover: payload.cover ?? null,
       materials: (payload.materials ?? []).map(toMaterial),
       services: (payload.services ?? []).map(toService),
+      discount_percent: payload.discount_percent ?? null,
+      discount_amount: payload.discount_amount ?? null,
       payments: (payload.payments ?? []).map(toPayment),
       created_at: new Date().toISOString(),
     }
@@ -232,6 +237,7 @@ export const useObjectsStore = defineStore('objects', () => {
           ...service,
           workers: (service.workers ?? []).map(normalizeServiceWorker),
         })),
+        discount: normalizeDiscount(draft.discount),
         payments: (draft.payments ?? []).map(normalizePayment),
       }
     } catch {

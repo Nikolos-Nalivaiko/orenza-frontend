@@ -126,22 +126,47 @@ function onKeydown(event: KeyboardEvent): void {
   <div ref="root" class="client" :class="{ 'client--invalid': error }">
     <!-- Обраний замовник — картка, а не рядок: видно, з ким саме договір. -->
     <div v-if="selected && !open" class="picked">
-      <span class="picked__mono" aria-hidden="true">{{ monogram(selected.name) }}</span>
-
-      <span class="picked__body">
+      <div class="picked__head">
+        <span class="picked__mono" aria-hidden="true">{{ monogram(selected.name) }}</span>
         <span class="picked__name">{{ selected.name }}</span>
-        <span class="picked__meta">
-          {{ selected.contact }}
-          <template v-if="selected.phone"> · {{ selected.phone }}</template>
-        </span>
-      </span>
 
-      <span class="picked__actions">
-        <button type="button" class="picked__btn" @click="start">Змінити</button>
-        <button type="button" class="picked__btn picked__btn--drop" @click="clear">
-          Відвʼязати
-        </button>
-      </span>
+        <span v-if="selected.discount > 0" class="picked__disc" title="Персональна знижка">
+          знижка {{ selected.discount }}%
+        </span>
+
+        <span class="picked__actions">
+          <button
+            type="button"
+            class="picked__btn"
+            title="Змінити замовника"
+            aria-label="Змінити замовника"
+            @click="start"
+          >
+            <AppIcon name="swap" />
+          </button>
+          <button
+            type="button"
+            class="picked__btn picked__btn--drop"
+            title="Відвʼязати замовника"
+            aria-label="Відвʼязати замовника"
+            @click="clear"
+          >
+            <AppIcon name="close" />
+          </button>
+        </span>
+      </div>
+
+      <!-- Контакт і телефон підписані: в один рядок через крапку вони зливались. -->
+      <dl class="picked__facts">
+        <div>
+          <dt>Контакт</dt>
+          <dd>{{ selected.contact }}</dd>
+        </div>
+        <div v-if="selected.phone">
+          <dt>Телефон</dt>
+          <dd class="picked__phone">{{ selected.phone }}</dd>
+        </div>
+      </dl>
     </div>
 
     <div v-else class="client__field">
@@ -192,6 +217,9 @@ function onKeydown(event: KeyboardEvent): void {
                 <span class="opt__meta">{{ client.contact }}</span>
               </span>
 
+              <!-- Персональну знижку видно ще до вибору: вона поїде в обʼєкт. -->
+              <span v-if="client.discount > 0" class="opt__disc">−{{ client.discount }}%</span>
+
               <AppIcon v-if="client.id === model" name="check" class="opt__tick" />
             </li>
 
@@ -231,6 +259,9 @@ function onKeydown(event: KeyboardEvent): void {
 .client {
   display: grid;
   gap: 7px;
+
+  /* Картка обраного перебудовується під свою колонку, а не під вікно. */
+  container-type: inline-size;
 }
 
 /* Список випадає з поля, а не з усього блоку — інакше він накриває підказку. */
@@ -305,11 +336,8 @@ function onKeydown(event: KeyboardEvent): void {
 
 .picked {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
   gap: 12px;
-  min-height: 54px;
-  padding: 8px 12px 8px 10px;
+  padding: 12px;
   border: 1px solid var(--brand);
   border-radius: var(--r-md);
   background: var(--paper-raised);
@@ -324,7 +352,15 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+.picked__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .picked__mono {
+  flex: none;
   display: grid;
   place-items: center;
   width: 36px;
@@ -337,14 +373,10 @@ function onKeydown(event: KeyboardEvent): void {
   font-weight: 600;
 }
 
-.picked__body {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
 .picked__name {
-  font-size: 14.5px;
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -352,45 +384,81 @@ function onKeydown(event: KeyboardEvent): void {
   text-overflow: ellipsis;
 }
 
-.picked__meta {
-  font-size: 12px;
+/* Підписані факти: контакт і номер більше не зливаються в один рядок. */
+.picked__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.picked__facts dt {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--ink-faint);
-  white-space: nowrap;
+}
+
+.picked__facts dd {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picked__phone {
+  font-variant-numeric: tabular-nums;
+}
+
+.picked__disc {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .picked__actions {
+  flex: none;
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
+/* Дії — іконки: назва замовника важливіша за два підписи до кнопок. */
 .picked__btn {
-  padding: 7px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-xs);
   background: transparent;
-  font-size: 12.5px;
-  font-weight: 600;
-  white-space: nowrap;
+  color: var(--ink-faint);
   transition:
-    border-color 0.16s var(--ease),
     background-color 0.16s var(--ease),
     color 0.16s var(--ease);
 }
 
-.picked__btn:hover {
-  border-color: var(--ink);
-  background: rgb(12 17 14 / 4%);
+.picked__btn :deep(.icon) {
+  width: 16px;
+  height: 16px;
 }
 
-.picked__btn--drop {
-  border-color: transparent;
-  color: var(--ink-faint);
+.picked__btn:hover {
+  background: var(--paper-sunk);
+  color: var(--ink);
 }
 
 .picked__btn--drop:hover {
-  border-color: transparent;
   background: var(--danger-tint);
   color: var(--danger);
 }
@@ -430,7 +498,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 .opt {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -498,6 +566,17 @@ function onKeydown(event: KeyboardEvent): void {
   text-overflow: ellipsis;
 }
 
+.opt__disc {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .opt__tick {
   width: 16px;
   height: 16px;
@@ -537,5 +616,20 @@ function onKeydown(event: KeyboardEvent): void {
 .pop-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+/* Вузько — знижка йде під назву, щоб та не стискалась до багатокрапки. */
+@container (width < 420px) {
+  .picked__head {
+    flex-wrap: wrap;
+  }
+
+  .picked__name {
+    flex-basis: calc(100% - 120px);
+  }
+
+  .picked__disc {
+    order: 1;
+  }
 }
 </style>

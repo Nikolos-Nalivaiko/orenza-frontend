@@ -94,10 +94,65 @@ export function paymentsTotals(payments: PaymentForm[]): PaymentsTotals {
   return totals
 }
 
+export type DiscountKind = 'percent' | 'amount'
+
+export const DISCOUNT_KIND_LABELS: Record<DiscountKind, string> = {
+  percent: '%',
+  amount: '₴',
+}
+
+export const DISCOUNT_PERCENT_MAX = 100
+
+/**
+ * Знижка на обʼєкт. У розрахунок іде завжди вона — персональна знижка
+ * замовника лише підставляє сюди значення за замовчуванням.
+ */
+export interface DiscountForm {
+  kind: DiscountKind
+  value: string
+  /** Значення прийшло від замовника й досі їде за ним, бо його не правили руками. */
+  fromClient: boolean
+}
+
+export function emptyDiscount(): DiscountForm {
+  return { kind: 'percent', value: '', fromClient: true }
+}
+
+/** Персональна знижка замовника у вигляді знижки обʼєкта. */
+export function clientDiscount(percent: number): DiscountForm {
+  return { kind: 'percent', value: percent > 0 ? String(percent) : '', fromClient: true }
+}
+
+export function normalizeDiscount(discount: Partial<DiscountForm> | undefined): DiscountForm {
+  return {
+    kind: discount?.kind ?? 'percent',
+    value: discount?.value ?? '',
+    fromClient: discount?.fromClient ?? true,
+  }
+}
+
+/** Скільки гривень знімає знижка. Більше, ніж є, вона зняти не може. */
+export function discountAmount(discount: DiscountForm, gross: number): number {
+  const value = parseAmount(discount.value)
+
+  if (value === null || value <= 0) {
+    return 0
+  }
+
+  if (discount.kind === 'amount') {
+    return Math.min(value, gross)
+  }
+
+  const percent = Math.min(value, DISCOUNT_PERCENT_MAX)
+
+  return Math.round(((gross * percent) / 100) * 100) / 100
+}
+
 /** Усе, з чого складаються гроші обʼєкта. ObjectForm підходить як є. */
 export interface FinanceInput {
   materials: MaterialForm[]
   services: ServiceForm[]
+  discount: DiscountForm
   payments: PaymentForm[]
 }
 
@@ -106,6 +161,10 @@ export interface FinanceTotals {
   materials: number
   /** Роботи замовнику: за фактом, де він уже є, інакше за планом. */
   services: number
+  /** Матеріали + роботи, ще без знижки. */
+  gross: number
+  /** Знижка в гривнях — скільки б її не вводили відсотками. */
+  discount: number
   /** Сума для клієнта — те, що він винен за обʼєкт разом. */
   client: number
   /** Собівартість: закупівля матеріалів + ЗП виконавців. */
@@ -126,12 +185,16 @@ export function financeTotals(input: FinanceInput): FinanceTotals {
   const services = servicesTotals(input.services)
   const payments = paymentsTotals(input.payments)
 
-  const client = materials.revenue + services.revenue
+  const gross = materials.revenue + services.revenue
+  const discount = discountAmount(input.discount, gross)
+  const client = gross - discount
   const cost = materials.cost + services.cost
 
   return {
     materials: materials.revenue,
     services: services.revenue,
+    gross,
+    discount,
     client,
     cost,
     profit: client - cost,
@@ -148,8 +211,31 @@ export function financeTotals(input: FinanceInput): FinanceTotals {
 export type PaymentErrors = Partial<Record<'name' | 'amount' | 'date', string>>
 
 export interface FinanceErrors {
+  discount?: string
   /** Помилки по платежах, ключ — id рядка. Справні рядки в мапу не потрапляють. */
   payments?: Record<string, PaymentErrors>
+}
+
+function discountError(discount: DiscountForm, gross: number): string | undefined {
+  if (discount.value.trim() === '') {
+    return undefined
+  }
+
+  const value = parseAmount(discount.value)
+
+  if (value === null) {
+    return 'Тільки число'
+  }
+
+  if (value < 0) {
+    return 'Не менше нуля'
+  }
+
+  if (discount.kind === 'percent') {
+    return value > DISCOUNT_PERCENT_MAX ? `Максимум ${DISCOUNT_PERCENT_MAX}%` : undefined
+  }
+
+  return value > gross ? 'Знижка більша за суму матеріалів і робіт' : undefined
 }
 
 export function validatePayment(payment: PaymentForm): PaymentErrors {
@@ -183,6 +269,13 @@ export function validatePayment(payment: PaymentForm): PaymentErrors {
 
 export function validateFinance(input: FinanceInput): FinanceErrors {
   const errors: FinanceErrors = {}
+  const gross = materialsTotals(input.materials).revenue + servicesTotals(input.services).revenue
+  const discount = discountError(input.discount, gross)
+
+  if (discount !== undefined) {
+    errors.discount = discount
+  }
+
   const payments: Record<string, PaymentErrors> = {}
 
   for (const payment of input.payments) {
@@ -201,7 +294,7 @@ export function validateFinance(input: FinanceInput): FinanceErrors {
 }
 
 export function hasFinanceErrors(errors: FinanceErrors): boolean {
-  return errors.payments !== undefined
+  return errors.discount !== undefined || errors.payments !== undefined
 }
 
 /* ── Запит ─────────────────────────────────────────────────────── */

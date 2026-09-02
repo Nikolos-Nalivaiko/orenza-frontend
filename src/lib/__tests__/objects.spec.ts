@@ -89,6 +89,20 @@ describe('buildObjectPayload', () => {
     })
   })
 
+  it('шле знижку так, як її ввели: відсотком або сумою', () => {
+    expect(
+      buildObjectPayload(makeForm({ discount: { kind: 'percent', value: '5', fromClient: true } })),
+    ).toMatchObject({ discount_percent: 5 })
+
+    const fixed = buildObjectPayload(
+      makeForm({ discount: { kind: 'amount', value: '1500', fromClient: false } }),
+    )
+
+    expect(fixed.discount_amount).toBe(1500)
+    expect(fixed.discount_percent).toBeUndefined()
+    expect(buildObjectPayload(makeForm()).discount_percent).toBeUndefined()
+  })
+
   it('додає платежі замовника, коли вони є', () => {
     const payload = buildObjectPayload(
       makeForm({ payments: [{ ...emptyPayment(), name: 'Аванс', amount: '20000' }] }),

@@ -23,7 +23,13 @@ import {
   type ObjectForm,
 } from '@/lib/objects'
 import { formatAmount } from '@/lib/amount'
-import { financeTotals, hasFinanceErrors, validateFinance, type FinanceErrors } from '@/lib/finance'
+import {
+  clientDiscount,
+  financeTotals,
+  hasFinanceErrors,
+  validateFinance,
+  type FinanceErrors,
+} from '@/lib/finance'
 import { validateMaterials, type MaterialErrors } from '@/lib/materials'
 import { servicesTotals, validateServices, type ServiceErrors } from '@/lib/services'
 import { useObjectsStore } from '@/stores/objects'
@@ -85,6 +91,9 @@ const solo = computed(() => workspaces.current?.type.value === 'personal')
 const servicesSummary = computed(() => servicesTotals(form.services))
 const money = computed(() => financeTotals(form))
 
+/** Персональна знижка обраного замовника — підказка для знижки обʼєкта. */
+const clientPercent = computed(() => objects.findClient(form.clientId)?.discount ?? 0)
+
 function tabCount(key: TabKey): number {
   if (key === 'materials') {
     return form.materials.length
@@ -121,6 +130,16 @@ onMounted(() => {
     Object.assign(form, draft)
     draftRestored.value = true
   }
+})
+
+// Знижка замовника — значення за замовчуванням: вона їде за клієнтом, поки
+// знижку обʼєкта не виправили руками.
+watch([() => form.clientId, () => objects.clients], () => {
+  if (!form.discount.fromClient) {
+    return
+  }
+
+  form.discount = clientDiscount(clientPercent.value)
 })
 
 // Чернетка пише себе сама: форма довга, і втратити її через випадковий
@@ -266,7 +285,13 @@ async function toObjects(): Promise<void> {
           </div>
           <div v-if="money.client > 0">
             <dt>Для клієнта</dt>
-            <dd>{{ formatAmount(money.client) }} ₴ · оплачено {{ formatAmount(money.paid) }} ₴</dd>
+            <dd>
+              {{ formatAmount(money.client) }} ₴
+              <template v-if="money.discount > 0">
+                · знижка {{ formatAmount(money.discount) }} ₴
+              </template>
+              · оплачено {{ formatAmount(money.paid) }} ₴
+            </dd>
           </div>
         </dl>
 
@@ -462,8 +487,10 @@ async function toObjects(): Promise<void> {
         <section v-show="tab === 'finance'" class="block block--plain">
           <FinancePanel
             v-model="form.payments"
+            v-model:discount="form.discount"
             :materials="form.materials"
             :services="form.services"
+            :client-percent="clientPercent"
             :errors="financeErrors"
           />
         </section>

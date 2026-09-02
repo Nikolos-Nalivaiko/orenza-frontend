@@ -6,8 +6,11 @@
  */
 
 import type { IconName } from '@/components/ui/icons'
+import { parseAmount } from '@/lib/amount'
 import {
   buildPaymentPayload,
+  emptyDiscount,
+  type DiscountForm,
   type Payment,
   type PaymentForm,
   type PaymentPayload,
@@ -54,6 +57,11 @@ export interface Client {
   name: string
   contact: string
   phone: string
+  /**
+   * Персональна знижка, %. Це підказка: новий обʼєкт бере її за замовчуванням,
+   * але в розрахунок іде знижка самого обʼєкта.
+   */
+  discount: number
 }
 
 /** Ресурс обʼєкта у форматі майбутнього ObjectResource. */
@@ -72,6 +80,9 @@ export interface ConstructionObject {
   cover: string | null
   materials: Material[]
   services: Service[]
+  /** Знижка обʼєкта — рівно в тому вигляді, у якому її ввели. */
+  discount_percent: number | null
+  discount_amount: number | null
   payments: Payment[]
   created_at: string | null
 }
@@ -95,7 +106,9 @@ export interface ObjectForm {
   materials: MaterialForm[]
   /** Роботи по обʼєкту — третій блок картки. */
   services: ServiceForm[]
-  /** Платежі замовника — четвертий блок, фінанси: аванс, транші, доплата. */
+  /** Знижка на обʼєкт — четвертий блок, фінанси. */
+  discount: DiscountForm
+  /** Платежі замовника: аванс, транші, доплата. */
   payments: PaymentForm[]
 }
 
@@ -125,6 +138,7 @@ export function emptyObjectForm(): ObjectForm {
     cover: null,
     materials: [],
     services: [],
+    discount: emptyDiscount(),
     payments: [],
   }
 }
@@ -296,11 +310,17 @@ export interface ObjectPayload {
   cover?: string
   materials?: MaterialPayload[]
   services?: ServicePayload[]
+  /** Знижку шлемо так, як її ввели: відсотком або сумою, але не обома одразу. */
+  discount_percent?: number
+  discount_amount?: number
   payments?: PaymentPayload[]
 }
 
 export function buildObjectPayload(form: ObjectForm): ObjectPayload {
   const description = form.description.trim()
+  const discount = parseAmount(form.discount.value)
+  const percent = form.discount.kind === 'percent'
+  const off = discount === null || discount <= 0 ? null : discount
 
   return {
     name: form.name.trim(),
@@ -315,6 +335,7 @@ export function buildObjectPayload(form: ObjectForm): ObjectPayload {
     ...(form.cover === null ? {} : { cover: form.cover }),
     ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
     ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
+    ...(off === null ? {} : percent ? { discount_percent: off } : { discount_amount: off }),
     ...(form.payments.length === 0 ? {} : { payments: form.payments.map(buildPaymentPayload) }),
   }
 }
@@ -323,9 +344,33 @@ export function buildObjectPayload(form: ObjectForm): ObjectPayload {
 
 /** Довідника замовників ще немає — беремо тих, що вже фігурують у дашборді. */
 export const DEMO_CLIENTS: readonly Client[] = [
-  { id: 1, name: 'ТОВ «Мегабуд»', contact: 'Ірина Ковальчук', phone: '+380 67 214 30 11' },
-  { id: 2, name: 'ОСББ «Стеценка, 12»', contact: 'Олег Дяченко', phone: '+380 50 118 44 02' },
-  { id: 3, name: 'ФОП Романюк О. П.', contact: 'Олександр Романюк', phone: '+380 63 902 77 15' },
-  { id: 4, name: 'ТОВ «Стальпром»', contact: 'Марія Гнатюк', phone: '+380 44 501 22 90' },
-  { id: 5, name: 'Приватний замовник', contact: 'Без компанії', phone: '' },
+  {
+    id: 1,
+    name: 'ТОВ «Мегабуд»',
+    contact: 'Ірина Ковальчук',
+    phone: '+380 67 214 30 11',
+    discount: 5,
+  },
+  {
+    id: 2,
+    name: 'ОСББ «Стеценка, 12»',
+    contact: 'Олег Дяченко',
+    phone: '+380 50 118 44 02',
+    discount: 0,
+  },
+  {
+    id: 3,
+    name: 'ФОП Романюк О. П.',
+    contact: 'Олександр Романюк',
+    phone: '+380 63 902 77 15',
+    discount: 3,
+  },
+  {
+    id: 4,
+    name: 'ТОВ «Стальпром»',
+    contact: 'Марія Гнатюк',
+    phone: '+380 44 501 22 90',
+    discount: 7,
+  },
+  { id: 5, name: 'Приватний замовник', contact: 'Без компанії', phone: '', discount: 0 },
 ]
