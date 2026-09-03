@@ -2,11 +2,14 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
+import { formatAmount } from '@/lib/amount'
 import {
+  formatPositions,
   MATERIAL_BUYER_LABELS,
   MATERIAL_STATUS_LABELS,
   type Material,
   type MaterialPayload,
+  type MaterialStatus,
 } from '@/lib/materials'
 import {
   normalizeDiscount,
@@ -26,13 +29,18 @@ import {
   DEMO_CLIENTS,
   demoObjects,
   emptyObjectForm,
+  formatDay,
+  formatDiscount,
   isDemoObject,
   OBJECT_STATUS_LABELS,
   type Client,
   type ConstructionObject,
+  type ObjectDateField,
   type ObjectForm,
   type ObjectStatus,
 } from '@/lib/objects'
+import { transition, type ActivityKind, type ActivityRecord } from '@/lib/activity'
+import { photosOf, type ObjectPhoto } from '@/lib/photos'
 
 /**
  * Поки ендпоінтів обʼєктів немає, створене живе в localStorage — структура
@@ -42,6 +50,8 @@ const STORAGE_KEY = 'orenza.objects'
 const CLIENTS_KEY = 'orenza.clients'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
+const ACTIVITY_KEY = 'orenza.objects.activity'
+const PHOTOS_KEY = 'orenza.objects.photos'
 
 function readStorage(key: string): string | null {
   try {
@@ -61,12 +71,16 @@ function readList<T>(key: string, fallback: T[]): T[] {
   }
 }
 
-function write(key: string, value: unknown): void {
+/** false — записати не вдалося: приватний режим або переповнена квота. */
+function write(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value))
+
+    return true
   } catch {
-    // Приватний режим або переповнене сховище — дані просто не переживуть
-    // перезавантаження, показувати помилку за це не варто.
+    // Дані просто не переживуть перезавантаження. Для більшості записів це не
+    // варте окремої помилки — виняток лише фото, там про це кажемо вголос.
+    return false
   }
 }
 
@@ -91,6 +105,13 @@ export const useObjectsStore = defineStore('objects', () => {
 
   const items = ref<ConstructionObject[]>(readList<ConstructionObject>(STORAGE_KEY, []))
   const clients = ref<Client[]>([])
+
+  /** Журнал дій — те, чого з самого обʼєкта не відновити. Див. lib/activity. */
+  const activity = ref<ActivityRecord[]>(readList<ActivityRecord>(ACTIVITY_KEY, []))
+  const photos = ref<ObjectPhoto[]>(readList<ObjectPhoto>(PHOTOS_KEY, []))
+
+  /** Знімки не влізли у сховище — вони живуть лише до перезавантаження. */
+  const photosVolatile = ref(false)
 
   const isLoading = ref(true)
   /** Список бодай раз доїхав: картку обʼєкта відкривають і прямим посиланням. */
@@ -166,17 +187,263 @@ export const useObjectsStore = defineStore('objects', () => {
     persist()
   }
 
+  /* ── Стрічка подій ───────────────────────────────────────────── */
+
+  function nextId(rows: { id: number }[]): number {
+    return Math.max(0, ...rows.map((row) => row.id)) + 1
+  }
+
+  /** Запис у журнал. Автоподії сюди не пишемо — вони виводяться з обʼєкта. */
+  function log(
+    objectId: number,
+    kind: ActivityKind,
+    text: string,
+    detail: string | null = null,
+  ): void {
+    activity.value = [
+      ...activity.value,
+      {
+        id: nextId(activity.value),
+        object_id: objectId,
+        kind,
+        text,
+        detail,
+        at: new Date().toISOString(),
+      },
+    ]
+
+    write(ACTIVITY_KEY, activity.value)
+  }
+
+  function activityOf(id: number): ActivityRecord[] {
+    return activity.value.filter((record) => record.object_id === id)
+  }
+
+  function addNote(id: number, text: string): void {
+    const note = text.trim()
+
+    if (note !== '') {
+      log(id, 'note', note)
+    }
+  }
+
+  function removeRecord(recordId: number): void {
+    activity.value = activity.value.filter((record) => record.id !== recordId)
+    write(ACTIVITY_KEY, activity.value)
+  }
+
+  /* ── Фото ────────────────────────────────────────────────────── */
+
+  function objectPhotos(id: number): ObjectPhoto[] {
+    return photosOf(photos.value, id)
+  }
+
+  function persistPhotos(): void {
+    photosVolatile.value = !write(PHOTOS_KEY, photos.value)
+  }
+
+  function addPhoto(id: number, src: string, name: string): void {
+    photos.value = [
+      ...photos.value,
+      { id: nextId(photos.value), object_id: id, src, name, at: new Date().toISOString() },
+    ]
+
+    persistPhotos()
+  }
+
+  function removePhoto(photoId: number): void {
+    photos.value = photos.value.filter((photo) => photo.id !== photoId)
+    persistPhotos()
+  }
+
+  /* ── Точкові правки картки ───────────────────────────────────── */
+
   function setStatus(id: number, value: ObjectStatus): void {
+    const object = find(id)
+
     patch(id, { status: { value, label: OBJECT_STATUS_LABELS[value] } })
+
+    if (object !== null && object.status.value !== value) {
+      log(
+        id,
+        'status',
+        'Змінено статус',
+        transition(object.status.label, OBJECT_STATUS_LABELS[value]),
+      )
+    }
   }
 
   function setArchived(id: number, archived: boolean): void {
     patch(id, { archived_at: archived ? new Date().toISOString() : null })
+    log(id, 'object', archived ? 'Обʼєкт в архіві' : 'Обʼєкт повернуто з архіву')
+  }
+
+  function setDescription(id: number, value: string): void {
+    const object = find(id)
+    const next = value.trim() === '' ? null : value.trim()
+
+    if (object === null || object.description === next) {
+      return
+    }
+
+    patch(id, { description: next })
+    log(id, 'object', next === null ? 'Опис прибрано' : 'Оновлено опис')
+  }
+
+  /**
+   * Планові дати — домовленість із замовником, тож їхню зміну фіксуємо
+   * окремим записом. Фактичні самі по собі події стрічки: вони приїдуть туди
+   * з обʼєкта, і другий запис був би дублем.
+   */
+  function setDate(id: number, field: ObjectDateField, value: string): void {
+    const object = find(id)
+    const next = value === '' ? null : value
+
+    if (object === null || object[field] === next) {
+      return
+    }
+
+    patch(id, { [field]: next })
+
+    if (field === 'started_at' || field === 'finished_at') {
+      log(
+        id,
+        'object',
+        field === 'started_at' ? 'Змінено плановий початок' : 'Змінено плановий дедлайн',
+        transition(formatDay(object[field] ?? ''), formatDay(next ?? '')),
+      )
+    }
+  }
+
+  /** Знижку зберігаємо так, як її ввели: відсотком або сумою, не обома. */
+  function setDiscount(id: number, percent: number | null, amount: number | null): void {
+    const object = find(id)
+
+    if (
+      object === null ||
+      (object.discount_percent === percent && object.discount_amount === amount)
+    ) {
+      return
+    }
+
+    patch(id, { discount_percent: percent, discount_amount: amount })
+    log(
+      id,
+      'object',
+      'Змінено знижку',
+      transition(
+        formatDiscount(object.discount_percent, object.discount_amount),
+        formatDiscount(percent, amount),
+      ),
+    )
+  }
+
+  /* ── Матеріали обʼєкта ───────────────────────────────────────── */
+
+  /**
+   * Поява матеріалу в журнал не пишеться: стрічка виводить її з самого
+   * обʼєкта (див. lib/activity). А от рух по стадіях і зникнення позиції з
+   * даних не відновити — їх фіксуємо.
+   */
+  function addMaterial(id: number, payload: MaterialPayload): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    patch(id, { materials: [...object.materials, toMaterial(payload, nextId(object.materials))] })
+  }
+
+  /** Спільна правка позицій; поштучна зміна — той самий шлях зі списку з одного. */
+  function updateMaterials(
+    id: number,
+    materialIds: number[],
+    change: (material: Material) => Material,
+  ): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    patch(id, {
+      materials: object.materials.map((item) =>
+        materialIds.includes(item.id) ? change(item) : item,
+      ),
+    })
+  }
+
+  /**
+   * Статус міняють і поштучно, і цілою фурою — тож приймаємо список. Позиції,
+   * які вже стоять у цьому статусі, не рахуються зміненими: вони не мають
+   * потрапляти ні в стрічку, ні в підпис «оновлено N позицій».
+   */
+  function setMaterialStatus(id: number, materialIds: number[], value: MaterialStatus): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    const changed = object.materials.filter(
+      (item) => materialIds.includes(item.id) && item.status.value !== value,
+    )
+
+    if (changed.length === 0) {
+      return
+    }
+
+    const label = MATERIAL_STATUS_LABELS[value]
+
+    updateMaterials(id, materialIds, (item) => ({ ...item, status: { value, label } }))
+
+    // Одна позиція — видно, звідки й куди вона пішла; десяток з однієї
+    // поставки йде одним записом, інакше стрічка стає журналом складу.
+    const single = changed.length === 1 ? changed[0] : undefined
+
+    log(
+      id,
+      'material',
+      single === undefined ? 'Оновлено статуси матеріалів' : 'Змінено статус матеріалу',
+      single === undefined
+        ? `${formatPositions(changed.length)} → ${label}`
+        : `${single.name}: ${transition(single.status.label, label)}`,
+    )
+  }
+
+  /** Погодження замовником — прапорець, який ставлять і знімають на ходу. */
+  function setMaterialApproved(id: number, materialId: number, approved: boolean): void {
+    updateMaterials(id, [materialId], (item) => ({ ...item, approved_by_client: approved }))
+  }
+
+  function removeMaterial(id: number, materialId: number): void {
+    const object = find(id)
+    const material = object?.materials.find((item) => item.id === materialId) ?? null
+
+    if (object === null || material === null) {
+      return
+    }
+
+    patch(id, { materials: object.materials.filter((item) => item.id !== materialId) })
+    log(
+      id,
+      'material',
+      'Прибрано матеріал',
+      `${material.name}, ${formatAmount(material.quantity)} ${material.unit}`,
+    )
   }
 
   function remove(id: number): void {
     items.value = items.value.filter((item) => item.id !== id)
     persist()
+
+    // Разом з обʼєктом їде і все, що до нього кріпилось.
+    activity.value = activity.value.filter((record) => record.object_id !== id)
+    photos.value = photos.value.filter((photo) => photo.object_id !== id)
+
+    write(ACTIVITY_KEY, activity.value)
+    write(PHOTOS_KEY, photos.value)
   }
 
   function reset(): void {
@@ -224,9 +491,9 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Позиція матеріалу у вигляді, у якому її поверне бекенд. */
-  function toMaterial(payload: MaterialPayload, index: number): Material {
+  function toMaterial(payload: MaterialPayload, id: number): Material {
     return {
-      id: index + 1,
+      id,
       name: payload.name,
       unit: payload.unit,
       quantity: payload.quantity,
@@ -303,7 +570,7 @@ export const useObjectsStore = defineStore('objects', () => {
       actual_started_at: payload.actual_started_at ?? null,
       actual_finished_at: payload.actual_finished_at ?? null,
       cover: payload.cover ?? null,
-      materials: (payload.materials ?? []).map(toMaterial),
+      materials: (payload.materials ?? []).map((item, index) => toMaterial(item, index + 1)),
       services: (payload.services ?? []).map(toService),
       discount_percent: payload.discount_percent ?? null,
       discount_amount: payload.discount_amount ?? null,
@@ -379,7 +646,21 @@ export const useObjectsStore = defineStore('objects', () => {
     find,
     setStatus,
     setArchived,
+    setDescription,
+    setDate,
+    setDiscount,
+    addMaterial,
+    setMaterialStatus,
+    setMaterialApproved,
+    removeMaterial,
     remove,
+    photosVolatile,
+    activityOf,
+    addNote,
+    removeRecord,
+    objectPhotos,
+    addPhoto,
+    removePhoto,
     findClient,
     fetchClients,
     addClient,

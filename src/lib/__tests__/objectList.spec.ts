@@ -126,6 +126,26 @@ describe('objectSummary', () => {
     expect(summary.progress).toBe(0)
   })
 
+  it('собівартість збирає закупівлю матеріалів і зарплату виконавців', () => {
+    const summary = objectSummary(makeObject(), TODAY)
+
+    // 100 × 3000 закупівлі + 100 × 400 зарплати.
+    expect(summary.cost).toBe(340_000)
+    expect(summary.profit).toBe(460_000 - 340_000)
+  })
+
+  it('матеріали замовника нам нічого не коштують', () => {
+    const summary = objectSummary(
+      makeObject({
+        materials: [material({ buyer: { value: 'client', label: 'Замовник' } })],
+        services: [],
+      }),
+      TODAY,
+    )
+
+    expect(summary.cost).toBe(0)
+  })
+
   it('оплата рахується лише за платежами зі статусом «оплачено»', () => {
     const summary = objectSummary(
       makeObject({

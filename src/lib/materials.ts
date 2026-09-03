@@ -10,6 +10,7 @@
  * GET|POST /api/v1/objects/{id}/materials.
  */
 
+import type { IconName } from '@/components/ui/icons'
 import { multiply, parseAmount } from '@/lib/amount'
 
 export type MaterialStatus = 'needed' | 'ordered' | 'delivered' | 'used'
@@ -38,6 +39,19 @@ export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {
 export const MATERIAL_BUYER_LABELS: Record<MaterialBuyer, string> = {
   contractor: 'Підрядник',
   client: 'Замовник',
+}
+
+/** Значок стадії: список → очікування → ящик на майданчику → зроблено. */
+export const MATERIAL_STATUS_ICONS: Record<MaterialStatus, IconName> = {
+  needed: 'estimate',
+  ordered: 'clock',
+  delivered: 'box',
+  used: 'check',
+}
+
+/** Місце статусу в життєвому шляху позиції — за ним же їх і сортуємо. */
+export function materialStatusIndex(status: MaterialStatus): number {
+  return MATERIAL_STATUSES.findIndex((option) => option.value === status)
 }
 
 export const MATERIAL_UNITS = ['шт', 'м', 'м²', 'м³', 'кг', 'т', 'л', 'меш', 'упак', 'пал'] as const
@@ -250,4 +264,153 @@ export interface Material {
   client_price: number | null
   status: { value: MaterialStatus; label: string }
   approved_by_client: boolean
+}
+
+/* ── Закупівлі обʼєкта ─────────────────────────────────────────── */
+
+/**
+ * Далі — те, чим живе вкладка «Матеріали» в картці обʼєкта: там позиції вже
+ * не форма, а збережені записи, і рахуються вони рядком цілком, а не за
+ * одиницю. Правило те саме, що й у формі: у матеріалів замовника грошей
+ * немає взагалі, тож обидві суми там null, а не нуль.
+ */
+
+export function materialCostTotal(material: Material): number | null {
+  return material.buyer.value === 'client' ? null : (material.cost_price ?? 0) * material.quantity
+}
+
+export function materialClientTotal(material: Material): number | null {
+  return material.buyer.value === 'client' ? null : (material.client_price ?? 0) * material.quantity
+}
+
+export function materialLineProfit(material: Material): number | null {
+  const cost = materialCostTotal(material)
+  const revenue = materialClientTotal(material)
+
+  return cost === null || revenue === null ? null : revenue - cost
+}
+
+export interface MaterialsSummary {
+  /** Позицій усього — саме стільки рядків у таблиці. */
+  total: number
+  /** З них купує замовник напряму: у грошах обʼєкта їх немає. */
+  clientCount: number
+  cost: number
+  revenue: number
+  profit: number
+  /** Скільки позицій на кожній стадії закупівлі. */
+  byStatus: Record<MaterialStatus, number>
+}
+
+export function materialsSummary(materials: Material[]): MaterialsSummary {
+  const summary: MaterialsSummary = {
+    total: materials.length,
+    clientCount: 0,
+    cost: 0,
+    revenue: 0,
+    profit: 0,
+    byStatus: { needed: 0, ordered: 0, delivered: 0, used: 0 },
+  }
+
+  for (const material of materials) {
+    summary.byStatus[material.status.value] += 1
+
+    if (material.buyer.value === 'client') {
+      summary.clientCount += 1
+
+      continue
+    }
+
+    summary.cost += materialCostTotal(material) ?? 0
+    summary.revenue += materialClientTotal(material) ?? 0
+  }
+
+  summary.profit = summary.revenue - summary.cost
+
+  return summary
+}
+
+/** 1 позиція, 2–4 позиції, 5+ позицій. */
+export function formatPositions(count: number): string {
+  const tail = count % 100 >= 11 && count % 100 <= 14 ? 0 : count % 10
+
+  if (tail === 1) {
+    return `${count} позиція`
+  }
+
+  return tail >= 2 && tail <= 4 ? `${count} позиції` : `${count} позицій`
+}
+
+/* ── Фільтри та сортування ─────────────────────────────────────── */
+
+export type MaterialSort = 'added' | 'status' | 'name' | 'amount'
+
+export interface MaterialSortOption {
+  value: MaterialSort
+  label: string
+}
+
+export const MATERIAL_SORTS: readonly MaterialSortOption[] = [
+  { value: 'added', label: 'Як додано' },
+  { value: 'status', label: 'За стадією' },
+  { value: 'name', label: 'За назвою' },
+  { value: 'amount', label: 'Найдорожчі' },
+]
+
+export interface MaterialFilters {
+  query: string
+  /** Порожній список означає «усі стадії». */
+  statuses: MaterialStatus[]
+  /** null — не важливо, хто купує. */
+  buyer: MaterialBuyer | null
+  sort: MaterialSort
+}
+
+export function defaultMaterialFilters(): MaterialFilters {
+  return { query: '', statuses: [], buyer: null, sort: 'added' }
+}
+
+export function isDefaultMaterialFilters(filters: MaterialFilters): boolean {
+  return (
+    filters.query.trim() === '' &&
+    filters.statuses.length === 0 &&
+    filters.buyer === null &&
+    filters.sort === 'added'
+  )
+}
+
+function compareMaterials(left: Material, right: Material, sort: MaterialSort): number {
+  if (sort === 'status') {
+    return materialStatusIndex(left.status.value) - materialStatusIndex(right.status.value)
+  }
+
+  if (sort === 'name') {
+    return left.name.localeCompare(right.name, 'uk')
+  }
+
+  if (sort === 'amount') {
+    return (materialClientTotal(right) ?? 0) - (materialClientTotal(left) ?? 0)
+  }
+
+  return 0
+}
+
+/** Фільтрація й сортування одним проходом — рівно те, що показує таблиця. */
+export function filterMaterials(materials: Material[], filters: MaterialFilters): Material[] {
+  const needle = filters.query.trim().toLowerCase()
+
+  const rows = materials.filter((material) => {
+    if (filters.statuses.length > 0 && !filters.statuses.includes(material.status.value)) {
+      return false
+    }
+
+    if (filters.buyer !== null && material.buyer.value !== filters.buyer) {
+      return false
+    }
+
+    return needle === '' || material.name.toLowerCase().includes(needle)
+  })
+
+  // Сортування стабільне, тож «Як додано» лишає позиції в порядку введення.
+  return rows.sort((left, right) => compareMaterials(left, right, filters.sort))
 }

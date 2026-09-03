@@ -13,6 +13,10 @@ export interface ObjectSummary {
   readiness: number | null
   /** Сума для клієнта: матеріали + роботи − знижка. */
   client: number
+  /** Собівартість: закупівля матеріалів + ЗП виконавців. */
+  cost: number
+  /** Профіт однією цифрою: сума для клієнта − собівартість. */
+  profit: number
   paid: number
   /** Залишок до сплати; відʼємний — переплата. */
   due: number
@@ -54,6 +58,30 @@ function servicesRevenue(object: ConstructionObject): number {
   }
 
   return revenue
+}
+
+/**
+ * Собівартість обʼєкта: закупівля матеріалів, які беремо ми, плюс зарплата
+ * виконавців за роботами. Матеріали замовника грошей не коштують нам зовсім.
+ */
+function objectCost(object: ConstructionObject): number {
+  let cost = 0
+
+  for (const material of object.materials) {
+    if (material.buyer.value === 'client') {
+      continue
+    }
+
+    cost += (material.cost_price ?? 0) * material.quantity
+  }
+
+  for (const service of object.services) {
+    for (const worker of service.workers) {
+      cost += worker.volume * worker.rate
+    }
+  }
+
+  return cost
 }
 
 function discountOf(object: ConstructionObject, gross: number): number {
@@ -107,6 +135,7 @@ export function servicesDone(object: ConstructionObject): { done: number; total:
 export function objectSummary(object: ConstructionObject, today: string): ObjectSummary {
   const gross = materialsRevenue(object) + servicesRevenue(object)
   const client = gross - discountOf(object, gross)
+  const cost = objectCost(object)
 
   const paid = object.payments.reduce(
     (sum, payment) => sum + (payment.status.value === 'paid' ? payment.amount : 0),
@@ -118,6 +147,8 @@ export function objectSummary(object: ConstructionObject, today: string): Object
   return {
     readiness: readiness(object),
     client,
+    cost,
+    profit: client - cost,
     paid,
     due: client - paid,
     progress: client === 0 ? 0 : clamp01(paid / client),

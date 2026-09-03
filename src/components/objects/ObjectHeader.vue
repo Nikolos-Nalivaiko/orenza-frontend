@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import ObjectActions from '@/components/objects/ObjectActions.vue'
 import ObjectStatusMenu from '@/components/objects/ObjectStatusMenu.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
-import { formatDay, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
+import { daysBetween, formatDay, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
 import { formatDeadline, servicesDone, type ObjectSummary } from '@/lib/objectList'
 import { monogram } from '@/lib/workspaces'
 
+/** Куди веде картка показника: до вкладки, де ця цифра й робиться. */
+export type HeaderTab = 'overview' | 'services' | 'finance'
+
 const props = defineProps<{ object: ConstructionObject; summary: ObjectSummary }>()
 
-const emit = defineEmits<{ status: [status: ObjectStatus]; archive: []; remove: [] }>()
+const emit = defineEmits<{
+  status: [status: ObjectStatus]
+  archive: []
+  remove: []
+  tab: [tab: HeaderTab]
+}>()
 
 const archived = computed(() => props.object.archived_at !== null)
 
@@ -25,6 +33,60 @@ const percent = computed(() =>
 )
 
 const paidPercent = computed(() => Math.round(props.summary.progress * 100))
+
+/**
+ * Скільки строку вже минуло: дедлайн без цієї смуги — просто дата, а з нею
+ * видно, чи встигаємо. Рахуємо від планового початку, а не від факту: план
+ * і є те, з чим звіряються.
+ */
+const timePercent = computed(() => {
+  const { started_at: start, finished_at: end } = props.object
+  const left = props.summary.daysLeft
+
+  if (start === null || end === null || left === null) {
+    return null
+  }
+
+  const total = daysBetween(start, end)
+
+  if (total === null || total <= 0) {
+    return null
+  }
+
+  return Math.round(Math.min(1, Math.max(0, (total - left) / total)) * 100)
+})
+
+/** Дедлайн уже на носі — підпис стає жовтим, ще до прострочення. */
+const soon = computed(() => {
+  const left = props.summary.daysLeft
+
+  return left !== null && left >= 0 && left <= 3
+})
+
+const copied = ref(false)
+
+let copiedTimer: number | undefined
+
+/** Номер із картки частіше не набирають, а переносять у месенджер. */
+async function copyPhone(): Promise<void> {
+  const phone = props.object.client?.phone
+
+  if (!phone) {
+    return
+  }
+
+  try {
+    await navigator.clipboard.writeText(phone)
+  } catch {
+    return
+  }
+
+  copied.value = true
+  window.clearTimeout(copiedTimer)
+  copiedTimer = window.setTimeout(() => (copied.value = false), 1600)
+}
+
+onBeforeUnmount(() => window.clearTimeout(copiedTimer))
 </script>
 
 <template>
@@ -76,80 +138,166 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
       </div>
     </div>
 
-    <!-- Чотири блоки, за якими заходять на обʼєкт. Однакові в усіх вкладках. -->
-    <div class="facts">
-      <!-- Замовник розгорнутий одразу: телефон потрібен частіше, ніж будь-що інше. -->
-      <section class="fact fact--client">
-        <h2 class="fact__label">Замовник</h2>
+    <!--
+      Чотири блоки, за якими заходять на обʼєкт. Усі складені однаково —
+      підпис, цифра, смуга, рядок пояснення, — і рядки вирівняні між картками
+      через subgrid: інакше цифри стрибають одна відносно одної.
 
-        <template v-if="object.client">
-          <div class="client">
+      Три з них ведуть у вкладку, де ця цифра й робиться, четвертий — замовник
+      — тримає його телефон під рукою.
+    -->
+    <div class="facts">
+      <section class="fact fact--client">
+        <header class="fact__top">
+          <h2 class="fact__label">Замовник</h2>
+
+          <span v-if="(object.client?.discount ?? 0) > 0" class="chip chip--brand">
+            −{{ object.client?.discount }}%
+          </span>
+        </header>
+
+        <div class="fact__main">
+          <div v-if="object.client" class="client">
             <span class="client__mono" aria-hidden="true">{{ monogram(object.client.name) }}</span>
 
             <span class="client__body">
               <span class="client__name">{{ object.client.name }}</span>
-              <span class="client__contact">{{ object.client.contact }}</span>
+              <span class="client__contact">{{
+                object.client.contact || 'контакт не вказано'
+              }}</span>
             </span>
           </div>
 
-          <p class="client__row">
-            <AppIcon name="user" />
-            <a v-if="object.client.phone" class="client__tel" :href="`tel:${object.client.phone}`">
-              {{ object.client.phone }}
+          <p v-else class="fact__none">Обʼєкт без замовника</p>
+        </div>
+
+        <div class="fact__meter" />
+
+        <div class="fact__foot fact__foot--row">
+          <template v-if="object.client?.phone">
+            <a class="tel" :href="`tel:${object.client.phone}`">
+              <AppIcon name="phone" />
+              <span>{{ object.client.phone }}</span>
             </a>
-            <span v-else class="fact__none">телефон не вказано</span>
-          </p>
 
-          <p v-if="object.client.discount > 0" class="client__disc">
-            Персональна знижка −{{ object.client.discount }}%
-          </p>
-        </template>
+            <!-- Номер частіше переносять у месенджер, ніж набирають з екрана. -->
+            <button
+              type="button"
+              class="copy"
+              :class="{ 'copy--done': copied }"
+              :title="copied ? 'Скопійовано' : 'Скопіювати номер'"
+              :aria-label="copied ? 'Номер скопійовано' : 'Скопіювати номер'"
+              @click="copyPhone"
+            >
+              <AppIcon :name="copied ? 'check' : 'copy'" />
+            </button>
+          </template>
 
-        <p v-else class="fact__none">Обʼєкт без замовника</p>
+          <span v-else-if="object.client" class="fact__none">телефон не вказано</span>
+        </div>
       </section>
 
       <!-- Готовність рахується з робіт: руками її не виставляють. -->
-      <section class="fact">
-        <h2 class="fact__label">Готовність</h2>
+      <section class="fact fact--go">
+        <header class="fact__top">
+          <h2 class="fact__label">Готовність</h2>
 
-        <p class="fact__value fact__value--big">{{ percent === null ? '—' : `${percent}%` }}</p>
+          <button
+            type="button"
+            class="fact__jump"
+            aria-label="Відкрити вкладку «Послуги»"
+            @click="emit('tab', 'services')"
+          >
+            <AppIcon name="forward" />
+          </button>
+        </header>
 
-        <span class="track">
-          <span class="track__fill" :style="{ width: `${percent ?? 0}%` }" />
-        </span>
+        <div class="fact__main">
+          <p class="fact__value">{{ percent === null ? '—' : `${percent}%` }}</p>
+        </div>
 
-        <p class="fact__sub">
+        <div class="fact__meter">
+          <span class="track">
+            <span class="track__fill" :style="{ width: `${percent ?? 0}%` }" />
+          </span>
+        </div>
+
+        <p class="fact__foot">
           <template v-if="works.total > 0">
-            {{ works.done }} з {{ works.total }} робіт виконано
+            <span class="fact__strong">{{ works.done }} з {{ works.total }}</span>
+            робіт виконано
           </template>
           <template v-else>робіт ще немає — рахувати нічого</template>
         </p>
       </section>
 
-      <section class="fact fact--money">
-        <h2 class="fact__label">{{ overpaid ? 'Переплата' : 'Залишок до сплати' }}</h2>
+      <section class="fact fact--go fact--money">
+        <header class="fact__top">
+          <h2 class="fact__label">{{ overpaid ? 'Переплата' : 'Залишок до сплати' }}</h2>
 
-        <p class="fact__value fact__value--big">{{ formatAmount(Math.abs(summary.due)) }} ₴</p>
+          <button
+            type="button"
+            class="fact__jump"
+            aria-label="Відкрити вкладку «Фінанси»"
+            @click="emit('tab', 'finance')"
+          >
+            <AppIcon name="forward" />
+          </button>
+        </header>
 
-        <span class="track">
-          <span class="track__fill track__fill--pay" :style="{ width: `${paidPercent}%` }" />
-        </span>
+        <div class="fact__main">
+          <p class="fact__value">
+            {{ formatAmount(Math.abs(summary.due)) }} <span class="cur">₴</span>
+          </p>
+        </div>
 
-        <p class="fact__sub">
-          оплачено {{ formatAmount(summary.paid) }} з {{ formatAmount(summary.client) }} ₴
+        <div class="fact__meter">
+          <span class="track">
+            <span class="track__fill track__fill--pay" :style="{ width: `${paidPercent}%` }" />
+          </span>
+        </div>
+
+        <p class="fact__foot">
+          оплачено <span class="fact__strong">{{ paidPercent }}%</span> —
+          {{ formatAmount(summary.paid) }} з {{ formatAmount(summary.client) }} ₴
         </p>
       </section>
 
-      <section class="fact" :class="{ 'fact--late': summary.overdue }">
-        <h2 class="fact__label">Дедлайн</h2>
+      <section class="fact fact--go" :class="{ 'fact--late': summary.overdue }">
+        <header class="fact__top">
+          <h2 class="fact__label">Дедлайн</h2>
 
-        <p class="fact__value fact__value--big">
-          {{ object.finished_at === null ? '—' : formatDay(object.finished_at) }}
-        </p>
+          <span
+            class="chip"
+            :class="{ 'chip--late': summary.overdue, 'chip--soon': soon && !summary.overdue }"
+          >
+            {{ formatDeadline(summary.daysLeft, summary.overdue) }}
+          </span>
 
-        <p class="fact__strong">{{ formatDeadline(summary.daysLeft, summary.overdue) }}</p>
+          <button
+            type="button"
+            class="fact__jump"
+            aria-label="Відкрити вкладку «Огляд» — там правлять дати"
+            @click="emit('tab', 'overview')"
+          >
+            <AppIcon name="forward" />
+          </button>
+        </header>
 
-        <p class="fact__sub">
+        <div class="fact__main">
+          <p class="fact__value">
+            {{ object.finished_at === null ? '—' : formatDay(object.finished_at) }}
+          </p>
+        </div>
+
+        <div class="fact__meter">
+          <!-- Смуга строку: скільки з планових днів уже позаду. -->
+          <span v-if="timePercent !== null" class="track">
+            <span class="track__fill track__fill--time" :style="{ width: `${timePercent}%` }" />
+          </span>
+        </div>
+
+        <p class="fact__foot">
           <template v-if="object.started_at">початок {{ formatDay(object.started_at) }}</template>
           <template v-else>початок не вказано</template>
         </p>
@@ -286,13 +434,50 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
 }
 
 .fact {
+  position: relative;
   display: grid;
+  grid-template-rows: auto auto auto auto;
   align-content: start;
-  gap: 8px;
+  row-gap: 10px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   background: var(--paper-raised);
+  transition:
+    border-color 0.16s var(--ease),
+    box-shadow 0.2s var(--ease),
+    transform 0.2s var(--ease);
+}
+
+/*
+ * Рядки карток живуть на сітці батька: підпис до підпису, цифра до цифри,
+ * смуга до смуги. Без цього блок замовника, у якого зверху аватар, зсував
+ * усі свої рядки відносно сусідів.
+ */
+@supports (grid-template-rows: subgrid) {
+  .fact {
+    grid-row: span 4;
+    grid-template-rows: subgrid;
+  }
+}
+
+.fact__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+}
+
+.fact__main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.fact__meter {
+  display: grid;
+  align-content: center;
+  min-height: 5px;
 }
 
 .fact__label {
@@ -300,33 +485,43 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  white-space: nowrap;
   color: var(--ink-faint);
 }
 
+/* Цифрам, по які сюди й заходять, потрібен розмір. */
 .fact__value {
-  font-size: 15px;
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-/* Цифрам, по які сюди й заходять, потрібен розмір. */
-.fact__value--big {
-  font-size: 24px;
-  letter-spacing: -0.02em;
+/* Гривня при сумі — одиниця, а не величина. */
+.cur {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ink-faint);
 }
 
 .fact__strong {
-  font-size: 13px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
-.fact__sub {
+.fact__foot {
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
+}
+
+.fact__foot--row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .fact__none {
@@ -338,10 +533,68 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
   border-color: var(--line-strong);
 }
 
-.fact--late .fact__value,
-.fact--late .fact__strong {
+.fact--late .fact__value {
   color: var(--danger);
 }
+
+/* ── Перехід у вкладку ─────────────────────────────────────────── */
+
+/* Показник — це двері в розділ, де його рахують: уся картка клікабельна,
+   стрілка лише позначає, що двері є. */
+.fact--go {
+  cursor: pointer;
+}
+
+.fact--go:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.fact--go:focus-within {
+  border-color: var(--brand);
+}
+
+.fact__jump {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  opacity: 0.4;
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease),
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+/* Кнопка тягне за собою всю картку — тож і клік по будь-якому її місцю. */
+.fact__jump::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-md);
+}
+
+.fact--go:hover .fact__jump {
+  opacity: 1;
+  transform: translateX(2px);
+  background: var(--paper-sunk);
+  color: var(--ink);
+}
+
+.fact__jump :deep(.icon) {
+  width: 15px;
+  height: 15px;
+}
+
+/* ── Смуги ─────────────────────────────────────────────────────── */
 
 .track {
   overflow: hidden;
@@ -360,6 +613,47 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
 
 .track__fill--pay {
   background: var(--brand);
+}
+
+.track__fill--time {
+  background: var(--line-strong);
+}
+
+.fact--late .track__fill--time {
+  background: var(--danger);
+}
+
+/* ── Плашки ────────────────────────────────────────────────────── */
+
+.chip {
+  margin-left: auto;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--paper-sunk);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-muted);
+}
+
+.chip--brand {
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.chip--soon {
+  background: var(--amber-tint);
+  color: #8a5c00;
+}
+
+.chip--late {
+  background: var(--danger-tint);
+  color: var(--danger);
+}
+
+/* Плашка вже зайняла праву межу — стрілці лишається стати поруч. */
+.chip + .fact__jump {
+  margin-left: 0;
 }
 
 /* ── Замовник ──────────────────────────────────────────────────── */
@@ -408,41 +702,78 @@ const paidPercent = computed(() => Math.round(props.summary.progress * 100))
   white-space: nowrap;
 }
 
-.client__row {
+/* Номер набирається одним дотиком: картку часто відкривають з телефону. */
+.tel {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  min-width: 0;
+  padding: 3px 8px;
+  margin-left: -8px;
+  border-radius: var(--r-xs);
   font-size: 13px;
   font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
   font-variant-numeric: tabular-nums;
+  transition:
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
 }
 
-.client__row :deep(.icon) {
+.tel:hover {
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.tel :deep(.icon) {
   flex: none;
   width: 14px;
   height: 14px;
   color: var(--ink-faint);
+  transition: color 0.16s var(--ease);
 }
 
-/* Номер набирається одним дотиком: картку часто відкривають з телефону. */
-.client__tel {
-  color: inherit;
-  text-decoration: none;
+.tel:hover :deep(.icon) {
+  color: var(--brand-strong);
 }
 
-.client__tel:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.tel span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.client__disc {
-  justify-self: start;
-  padding: 3px 9px;
-  border-radius: 999px;
+.copy {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-faint);
+  transition:
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.copy:hover {
+  background: var(--paper-sunk);
+  color: var(--ink);
+}
+
+/* Підтвердження живе півтори секунди — рівно щоб його встигли побачити. */
+.copy--done,
+.copy--done:hover {
   background: var(--brand-tint);
   color: var(--brand-strong);
-  font-size: 11.5px;
-  font-weight: 600;
+}
+
+.copy :deep(.icon) {
+  width: 14px;
+  height: 14px;
 }
 
 @media (width <= 560px) {

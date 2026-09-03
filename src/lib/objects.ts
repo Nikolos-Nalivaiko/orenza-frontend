@@ -6,7 +6,7 @@
  */
 
 import type { IconName } from '@/components/ui/icons'
-import { parseAmount } from '@/lib/amount'
+import { formatAmount, parseAmount } from '@/lib/amount'
 import {
   buildPaymentPayload,
   emptyDiscount,
@@ -92,6 +92,17 @@ export interface ConstructionObject {
   /** Архівований обʼєкт зникає зі списку, але лишається в історії. */
   archived_at: string | null
   created_at: string | null
+}
+
+/** Дати обʼєкта — пара «план» і пара «факт». Правлять їх поштучно з картки. */
+export type ObjectDateField =
+  'started_at' | 'finished_at' | 'actual_started_at' | 'actual_finished_at'
+
+export const OBJECT_DATE_LABELS: Record<ObjectDateField, string> = {
+  started_at: 'Початок · план',
+  finished_at: 'Завершення · план',
+  actual_started_at: 'Початок · факт',
+  actual_finished_at: 'Завершення · факт',
 }
 
 /* ── Форма ─────────────────────────────────────────────────────── */
@@ -237,6 +248,20 @@ export function formatDrift(form: ObjectForm): string {
   return drift > 0
     ? `Пізніше плану на ${formatDays(drift)}`
     : `Раніше плану на ${formatDays(drift)}`
+}
+
+/* ── Знижка ────────────────────────────────────────────────────── */
+
+/**
+ * Знижка обʼєкта людською мовою: «5%», «120 000 ₴» або порожньо, якщо її
+ * немає. Зберігається вона так, як її ввели, — тож і показуємо так само.
+ */
+export function formatDiscount(percent: number | null, amount: number | null): string {
+  if (amount !== null) {
+    return `${formatAmount(amount)} ₴`
+  }
+
+  return percent === null ? '' : `${formatAmount(percent)}%`
 }
 
 /* ── Валідація ─────────────────────────────────────────────────── */

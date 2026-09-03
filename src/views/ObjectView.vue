@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import MaterialsTab from '@/components/objects/MaterialsTab.vue'
 import ObjectDeleteDialog from '@/components/objects/ObjectDeleteDialog.vue'
 import ObjectHeader from '@/components/objects/ObjectHeader.vue'
+import ObjectOverview from '@/components/objects/ObjectOverview.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { todayIso, type ObjectStatus } from '@/lib/objects'
 import { objectSummary } from '@/lib/objectList'
@@ -103,6 +105,7 @@ function archiveFromDialog(): void {
         @status="setStatus"
         @archive="toggleArchive"
         @remove="confirming = true"
+        @tab="tab = $event"
       />
 
       <nav class="tabs" aria-label="Розділи картки обʼєкта">
@@ -119,9 +122,19 @@ function archiveFromDialog(): void {
         </button>
       </nav>
 
-      <!-- Вміст вкладок робимо наступними кроками — поки кожна чесно каже,
+      <ObjectOverview
+        v-if="tab === 'overview'"
+        :object="object"
+        :summary="summary"
+        :today="today"
+        @finance="tab = 'finance'"
+      />
+
+      <MaterialsTab v-else-if="tab === 'materials'" :object="object" />
+
+      <!-- Решту вкладок робимо наступними кроками — поки кожна чесно каже,
            що в ній зʼявиться. -->
-      <section class="pane">
+      <section v-else class="pane">
         <span class="pane__icon" aria-hidden="true"><AppIcon name="estimate" /></span>
         <h2 class="pane__title">{{ current?.label }}</h2>
         <p class="pane__text">{{ current?.plan }}</p>
