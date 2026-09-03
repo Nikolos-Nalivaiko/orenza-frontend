@@ -56,6 +56,7 @@ function payment(overrides: Partial<Payment> = {}): Payment {
     amount: 50_000,
     status: { value: 'paid', label: 'Оплачено' },
     paid_at: '2026-06-12',
+    client_visible: false,
     ...overrides,
   }
 }
@@ -79,6 +80,7 @@ function makeObject(overrides: Partial<ConstructionObject> = {}): ConstructionOb
     discount_percent: null,
     discount_amount: null,
     payments: [payment()],
+    public_token: 'test-token',
     archived_at: null,
     created_at: '2026-06-01T09:00:00.000Z',
     ...overrides,

@@ -17,6 +17,7 @@ import {
   PAYMENT_STATUS_LABELS,
   type Payment,
   type PaymentPayload,
+  type PaymentStatus,
 } from '@/lib/finance'
 import {
   formatWorks,
@@ -35,6 +36,8 @@ import {
   formatDay,
   formatDiscount,
   isDemoObject,
+  newPublicToken,
+  normalizeObject,
   OBJECT_STATUS_LABELS,
   type Client,
   type ConstructionObject,
@@ -106,7 +109,9 @@ export const useObjectsStore = defineStore('objects', () => {
   const progress = useProgressStore()
   const workspaces = useWorkspacesStore()
 
-  const items = ref<ConstructionObject[]>(readList<ConstructionObject>(STORAGE_KEY, []))
+  const items = ref<ConstructionObject[]>(
+    readList<ConstructionObject>(STORAGE_KEY, []).map(normalizeObject),
+  )
   const clients = ref<Client[]>([])
 
   /** Журнал дій — те, чого з самого обʼєкта не відновити. Див. lib/activity. */
@@ -173,7 +178,15 @@ export const useObjectsStore = defineStore('objects', () => {
         return
       }
 
-      items.value = readList<ConstructionObject>(STORAGE_KEY, [])
+      const stored = readList<ConstructionObject>(STORAGE_KEY, [])
+
+      items.value = stored.map(normalizeObject)
+
+      // Обʼєкт із минулої сесії міг лишитись без публічного токена: видаємо
+      // його один раз і одразу зберігаємо, щоб посилання не мінялось.
+      if (stored.some((item) => item.public_token === undefined)) {
+        persist()
+      }
     } finally {
       isLoading.value = false
       loaded.value = true
@@ -182,6 +195,29 @@ export const useObjectsStore = defineStore('objects', () => {
 
   function find(id: number): ConstructionObject | null {
     return items.value.find((item) => item.id === id) ?? null
+  }
+
+  /**
+   * Публічна сторінка знаходить обʼєкт лише за токеном: id туди не потрапляє
+   * взагалі, тож і перебирати нічого.
+   */
+  function findByToken(token: string): ConstructionObject | null {
+    return items.value.find((item) => item.public_token === token) ?? null
+  }
+
+  /** Завантаження для гостя: сторінку відкривають без входу й без простору. */
+  async function fetchTrack(): Promise<void> {
+    isLoading.value = true
+
+    try {
+      // TODO: GET /api/v1/track/{token} — окремий публічний ендпоінт.
+      await progress.track(delay(320))
+
+      items.value = readList<ConstructionObject>(STORAGE_KEY, []).map(normalizeObject)
+    } finally {
+      isLoading.value = false
+      loaded.value = true
+    }
   }
 
   /** Точкова правка обʼєкта зі списку: статус, готовність, архів. */
@@ -566,6 +602,72 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
+  /* ── Платежі обʼєкта ─────────────────────────────────────────── */
+
+  /**
+   * Гроші замовника: і те, що вже прийшло, і те, чого ще чекаємо. Кожен рух
+   * тут — подія, за якою потім звіряються, тож у стрічку йде все.
+   */
+  function addPayment(id: number, payload: PaymentPayload): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    patch(id, { payments: [...object.payments, toPayment(payload, nextId(object.payments))] })
+    log(
+      id,
+      'payment',
+      payload.status === 'paid' ? 'Отримано платіж' : 'Заплановано платіж',
+      `${formatAmount(payload.amount)} ₴${payload.paid_at === undefined ? '' : `, ${formatDay(payload.paid_at)}`}`,
+    )
+  }
+
+  /** Гроші прийшли — платіж із очікуваного стає отриманим, і навпаки. */
+  function setPaymentStatus(
+    id: number,
+    paymentId: number,
+    value: PaymentStatus,
+    date?: string,
+  ): void {
+    const object = find(id)
+    const payment = object?.payments.find((item) => item.id === paymentId) ?? null
+
+    if (object === null || payment === null || payment.status.value === value) {
+      return
+    }
+
+    const paidAt = value === 'paid' ? (payment.paid_at ?? date ?? null) : payment.paid_at
+
+    patch(id, {
+      payments: object.payments.map((item) =>
+        item.id === paymentId
+          ? { ...item, status: { value, label: PAYMENT_STATUS_LABELS[value] }, paid_at: paidAt }
+          : item,
+      ),
+    })
+
+    log(
+      id,
+      'payment',
+      value === 'paid' ? 'Отримано платіж' : 'Змінено статус платежу',
+      `${formatAmount(payment.amount)} ₴: ${transition(payment.status.label, PAYMENT_STATUS_LABELS[value])}`,
+    )
+  }
+
+  function removePayment(id: number, paymentId: number): void {
+    const object = find(id)
+    const payment = object?.payments.find((item) => item.id === paymentId) ?? null
+
+    if (object === null || payment === null) {
+      return
+    }
+
+    patch(id, { payments: object.payments.filter((item) => item.id !== paymentId) })
+    log(id, 'payment', 'Прибрано платіж', `${formatAmount(payment.amount)} ₴`)
+  }
+
   function remove(id: number): void {
     items.value = items.value.filter((item) => item.id !== id)
     persist()
@@ -653,14 +755,15 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Платіж у вигляді, у якому його поверне бекенд. */
-  function toPayment(payload: PaymentPayload, index: number): Payment {
+  function toPayment(payload: PaymentPayload, id: number): Payment {
     return {
-      id: index + 1,
+      id,
       name: payload.name,
       description: payload.description ?? null,
       amount: payload.amount,
       status: { value: payload.status, label: PAYMENT_STATUS_LABELS[payload.status] },
       paid_at: payload.paid_at ?? null,
+      client_visible: payload.client_visible ?? false,
     }
   }
 
@@ -706,7 +809,10 @@ export const useObjectsStore = defineStore('objects', () => {
       services: (payload.services ?? []).map((item, index) => toService(item, index + 1)),
       discount_percent: payload.discount_percent ?? null,
       discount_amount: payload.discount_amount ?? null,
-      payments: (payload.payments ?? []).map(toPayment),
+      payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
+      // Посилання для замовника видаємо одразу: воно має бути напоготові ще
+      // до того, як його попросять.
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: new Date().toISOString(),
     }
@@ -775,7 +881,9 @@ export const useObjectsStore = defineStore('objects', () => {
     reset,
     setView,
     fetchObjects,
+    fetchTrack,
     find,
+    findByToken,
     setStatus,
     setArchived,
     setDescription,
@@ -790,6 +898,9 @@ export const useObjectsStore = defineStore('objects', () => {
     setServiceFact,
     setServiceWorkers,
     removeService,
+    addPayment,
+    setPaymentStatus,
+    removePayment,
     remove,
     photosVolatile,
     activityOf,

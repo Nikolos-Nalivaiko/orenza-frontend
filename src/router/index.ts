@@ -37,6 +37,16 @@ const router = createRouter({
       component: () => import('@/views/RegisterView.vue'),
       meta: { guestOnly: true, title: 'Реєстрація' },
     },
+    /**
+     * Публічна сторінка обʼєкта для замовника: ані входу, ані простору вона
+     * не вимагає — доступ дає сам токен у адресі, тож і id обʼєкта тут немає.
+     */
+    {
+      path: '/track/:token',
+      name: 'track',
+      component: () => import('@/views/TrackView.vue'),
+      meta: { title: 'Обʼєкт' },
+    },
     {
       path: '/workspaces',
       name: 'workspaces',

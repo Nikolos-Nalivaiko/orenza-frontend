@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import FinanceTab from '@/components/objects/FinanceTab.vue'
 import MaterialsTab from '@/components/objects/MaterialsTab.vue'
 import ObjectDeleteDialog from '@/components/objects/ObjectDeleteDialog.vue'
 import ObjectHeader from '@/components/objects/ObjectHeader.vue'
@@ -134,6 +135,8 @@ function archiveFromDialog(): void {
       <MaterialsTab v-else-if="tab === 'materials'" :object="object" />
 
       <ServicesTab v-else-if="tab === 'services'" :object="object" />
+
+      <FinanceTab v-else-if="tab === 'finance'" :object="object" :today="today" />
 
       <!-- Решту вкладок робимо наступними кроками — поки кожна чесно каже,
            що в ній зʼявиться. -->

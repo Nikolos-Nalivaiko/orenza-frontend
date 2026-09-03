@@ -6,7 +6,12 @@ import { formatDay } from '@/lib/objects'
 import type { ObjectPhoto } from '@/lib/photos'
 
 /** Знімок на весь екран: дата, лічильник і гортання решти стрічки. */
-const props = defineProps<{ photos: ObjectPhoto[]; index: number }>()
+const props = defineProps<{
+  photos: ObjectPhoto[]
+  index: number
+  /** Публічна сторінка теж дивиться знімки — але видаляти їх звідти не можна. */
+  removable?: boolean
+}>()
 
 const emit = defineEmits<{ close: []; move: [index: number]; remove: [id: number] }>()
 
@@ -63,6 +68,7 @@ onBeforeUnmount(() => {
 
       <div class="viewer__tools">
         <button
+          v-if="removable !== false"
           type="button"
           class="tool tool--drop"
           aria-label="Видалити фото"

@@ -89,9 +89,52 @@ export interface ConstructionObject {
   discount_percent: number | null
   discount_amount: number | null
   payments: Payment[]
+  /**
+   * Ключ публічної сторінки обʼєкта: за ним замовник відкриває /track/{token}
+   * без реєстрації. Довгий і випадковий — саме тому, що доступ до нього має
+   * лише той, кому дали посилання, а не той, хто підібрав сусідній id.
+   */
+  public_token: string
   /** Архівований обʼєкт зникає зі списку, але лишається в історії. */
   archived_at: string | null
   created_at: string | null
+}
+
+/** 32 шістнадцяткові символи — підібрати перебором таке посилання нереально. */
+export function newPublicToken(): string {
+  const bytes = new Uint8Array(16)
+
+  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    crypto.getRandomValues(bytes)
+  } else {
+    // Старий браузер без Web Crypto: посилання лишається неперебірним, хоч і
+    // слабшим. На бекенді токен усе одно вироблятиметься сервером.
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256)
+    }
+  }
+
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+/** Адреса публічної сторінки — відносна, домен підставляє браузер. */
+export function trackPath(token: string): string {
+  return `/track/${token}`
+}
+
+/**
+ * Запис, збережений до появи якогось поля, добираємо до сьогоднішньої форми:
+ * інакше обʼєкт із минулої сесії лишиться без публічного посилання назавжди.
+ */
+export function normalizeObject(object: ConstructionObject): ConstructionObject {
+  return {
+    ...object,
+    public_token: object.public_token ?? newPublicToken(),
+    payments: (object.payments ?? []).map((payment) => ({
+      ...payment,
+      client_visible: payment.client_visible ?? false,
+    })),
+  }
 }
 
 /** Дати обʼєкта — пара «план» і пара «факт». Правлять їх поштучно з картки. */
@@ -488,6 +531,8 @@ function payment(
     amount,
     status: { value, label: PAYMENT_STATUS_LABELS[value] },
     paid_at: paidAt,
+    // У демоплатежів підписи нейтральні — їх не соромно показати замовнику.
+    client_visible: true,
   }
 }
 
@@ -514,6 +559,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
         payment(1, 'Аванс за етап', 600_000, 'paid', '2026-06-10'),
         payment(2, 'Транш за липень', 340_000, 'pending', '2026-09-20'),
       ],
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: '2026-06-01T09:00:00.000Z',
     },
@@ -535,6 +581,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: 3,
       discount_amount: null,
       payments: [payment(1, 'Аванс', 300_000, 'paid', '2026-05-18')],
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: '2026-05-08T11:20:00.000Z',
     },
@@ -556,6 +603,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: null,
       discount_amount: null,
       payments: [payment(1, 'Аванс', 120_000, 'paid', '2026-07-04')],
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: '2026-06-28T08:40:00.000Z',
     },
@@ -580,6 +628,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
         payment(1, 'Аванс', 200_000, 'paid', '2026-03-06'),
         payment(2, 'Розрахунок після здачі', 335_000, 'paid', '2026-08-25'),
       ],
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: '2026-03-02T10:10:00.000Z',
     },
@@ -601,6 +650,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       discount_percent: null,
       discount_amount: null,
       payments: [],
+      public_token: newPublicToken(),
       archived_at: null,
       created_at: '2026-08-30T14:05:00.000Z',
     },

@@ -1,6 +1,18 @@
 import { parseAmount } from '@/lib/amount'
-import { materialsTotals, type MaterialForm } from '@/lib/materials'
-import { servicesTotals, type ServiceForm } from '@/lib/services'
+import {
+  materialClientTotal,
+  materialCostTotal,
+  materialsTotals,
+  type Material,
+  type MaterialForm,
+} from '@/lib/materials'
+import {
+  serviceCostTotal,
+  serviceRevenueTotal,
+  servicesTotals,
+  type Service,
+  type ServiceForm,
+} from '@/lib/services'
 
 export type PaymentStatus = 'pending' | 'paid' | 'overdue' | 'cancelled'
 
@@ -305,6 +317,8 @@ export interface PaymentPayload {
   amount: number
   status: PaymentStatus
   paid_at?: string
+  /** Показати коментар платежу замовнику на публічній сторінці. */
+  client_visible?: boolean
 }
 
 export function buildPaymentPayload(payment: PaymentForm): PaymentPayload {
@@ -319,7 +333,14 @@ export function buildPaymentPayload(payment: PaymentForm): PaymentPayload {
   }
 }
 
-/** Ресурс платежу у форматі майбутнього PaymentResource. */
+/**
+ * Ресурс платежу у форматі майбутнього PaymentResource.
+ *
+ * `paid_at` — дата платежу в обидві сторони: коли гроші прийшли, якщо він
+ * оплачений, і коли їх чекають, якщо він ще в очікуванні. Другого поля під
+ * дату немає навмисно: графік надходжень — це той самий список платежів,
+ * а не окремий модуль рахунків.
+ */
 export interface Payment {
   id: number
   name: string
@@ -327,4 +348,203 @@ export interface Payment {
   amount: number
   status: { value: PaymentStatus; label: string }
   paid_at: string | null
+  /**
+   * Коментар до платежу видно замовнику на публічній сторінці. За
+   * замовчуванням — ні: «спитати бухгалтера» писали для себе, а не для нього.
+   */
+  client_visible: boolean
+}
+
+/* ── Гроші обʼєкта ─────────────────────────────────────────────── */
+
+/**
+ * Далі — те, чим живе вкладка «Фінанси» в картці обʼєкта. Нічого нового тут
+ * не рахується: суми приходять з матеріалів і робіт за тими самими правилами,
+ * що діють на їхніх вкладках, а знижка й платежі лише зводять їх докупи.
+ */
+
+/** Записи, з яких складаються гроші картки. ConstructionObject підходить як є. */
+export interface FinanceRecords {
+  materials: Material[]
+  services: Service[]
+  discount_percent: number | null
+  discount_amount: number | null
+  payments: Payment[]
+}
+
+/** Рядок розкладки: скільки виставляємо клієнту й скільки це коштує нам. */
+export interface FinanceLine {
+  revenue: number
+  cost: number
+}
+
+export interface ObjectFinance {
+  materials: FinanceLine
+  services: FinanceLine
+  /** Матеріали + роботи, ще без знижки. */
+  gross: number
+  /** Знижка в гривнях — скільки б її не вводили відсотками. */
+  discount: number
+  client: number
+  cost: number
+  profit: number
+  paid: number
+  /** Ще очікується: платежі, які позначили як заплановані. */
+  pending: number
+  /** З них прострочені — день очікування вже позаду. */
+  overdue: number
+  /** Залишок до сплати; відʼємний — це переплата. */
+  due: number
+  /** Частка оплаченого від суми для клієнта, 0…1. */
+  progress: number
+}
+
+/** Знижка обʼєкта в гривнях. Більше, ніж є, вона зняти не може. */
+export function recordDiscount(
+  percent: number | null,
+  amount: number | null,
+  gross: number,
+): number {
+  if (amount !== null) {
+    return Math.min(amount, gross)
+  }
+
+  if (percent === null) {
+    return 0
+  }
+
+  return Math.round(gross * Math.min(percent, DISCOUNT_PERCENT_MAX)) / 100
+}
+
+/** Платіж чекали раніше, ніж сьогодні, а він досі не прийшов. */
+export function isPaymentLate(payment: Payment, today: string): boolean {
+  return payment.status.value === 'pending' && payment.paid_at !== null && payment.paid_at < today
+}
+
+export function objectFinance(records: FinanceRecords, today: string): ObjectFinance {
+  const materials: FinanceLine = { revenue: 0, cost: 0 }
+  const services: FinanceLine = { revenue: 0, cost: 0 }
+
+  for (const material of records.materials) {
+    materials.revenue += materialClientTotal(material) ?? 0
+    materials.cost += materialCostTotal(material) ?? 0
+  }
+
+  for (const service of records.services) {
+    services.revenue += serviceRevenueTotal(service)
+    services.cost += serviceCostTotal(service)
+  }
+
+  const gross = materials.revenue + services.revenue
+  const discount = recordDiscount(records.discount_percent, records.discount_amount, gross)
+  const client = gross - discount
+  const cost = materials.cost + services.cost
+
+  let paid = 0
+  let pending = 0
+  let overdue = 0
+
+  for (const payment of records.payments) {
+    if (payment.status.value === 'cancelled') {
+      continue
+    }
+
+    if (payment.status.value === 'paid') {
+      paid += payment.amount
+
+      continue
+    }
+
+    pending += payment.amount
+
+    if (isPaymentLate(payment, today)) {
+      overdue += payment.amount
+    }
+  }
+
+  return {
+    materials,
+    services,
+    gross,
+    discount,
+    client,
+    cost,
+    profit: client - cost,
+    paid,
+    pending,
+    overdue,
+    due: client - paid,
+    progress: client === 0 ? 0 : Math.min(1, paid / client),
+  }
+}
+
+/**
+ * Автостатус залишку — світлофор, який власник читає першим: не оплачено,
+ * частково, повністю, переплата.
+ */
+export type DueState = 'none' | 'partial' | 'paid' | 'over'
+
+export const DUE_STATE_LABELS: Record<DueState, string> = {
+  none: 'Не оплачено',
+  partial: 'Оплачено частково',
+  paid: 'Оплачено повністю',
+  over: 'Переплата',
+}
+
+export function dueState(client: number, paid: number): DueState {
+  // Копійчана різниця після відсоткової знижки не має читатись як недоплата.
+  const left = client - paid
+
+  if (paid > 0 && left < -0.01) {
+    return 'over'
+  }
+
+  if (client > 0 && left <= 0.01) {
+    return 'paid'
+  }
+
+  return paid > 0 ? 'partial' : 'none'
+}
+
+/**
+ * Порядок списку платежів: спочатку історія — що вже отримали, свіже зверху,
+ * далі те, що ще чекаємо, найближче зверху. Скасовані йдуть у кінець.
+ */
+export function sortPayments(payments: Payment[], today: string): Payment[] {
+  function rank(payment: Payment): number {
+    if (payment.status.value === 'cancelled') {
+      return 2
+    }
+
+    return payment.status.value === 'paid' ? 0 : 1
+  }
+
+  return [...payments].sort((left, right) => {
+    const byGroup = rank(left) - rank(right)
+
+    if (byGroup !== 0) {
+      return byGroup
+    }
+
+    // Платіж без дати не має витісняти той, у якого вона є.
+    const a = left.paid_at ?? ''
+    const b = right.paid_at ?? ''
+
+    if (a === '' || b === '') {
+      return a === b ? 0 : a === '' ? 1 : -1
+    }
+
+    return rank(left) === 0 ? b.localeCompare(a) : a.localeCompare(b)
+  })
+}
+
+/** 1 платіж, 2–4 платежі, 5+ платежів. */
+export function formatPayments(count: number): string {
+  const tail = count % 100 >= 11 && count % 100 <= 14 ? 0 : count % 10
+
+  if (tail === 1) {
+    return `${count} платіж`
+  }
+
+  return tail >= 2 && tail <= 4 ? `${count} платежі` : `${count} платежів`
 }

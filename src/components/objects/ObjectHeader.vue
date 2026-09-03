@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import ObjectActions from '@/components/objects/ObjectActions.vue'
+import ObjectShare from '@/components/objects/ObjectShare.vue'
 import ObjectStatusMenu from '@/components/objects/ObjectStatusMenu.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
@@ -119,6 +120,8 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
       </div>
 
       <div class="ohead__tools">
+        <ObjectShare :token="object.public_token" :name="object.name" />
+
         <ObjectStatusMenu
           :status="object.status.value"
           :label="object.status.label"
