@@ -9,6 +9,7 @@
  * показується як дохід, без розкладки на профіт.
  */
 
+import type { IconName } from '@/components/ui/icons'
 import { multiply, parseAmount } from '@/lib/amount'
 
 export type ServiceStatus = 'planned' | 'in_progress' | 'done'
@@ -344,4 +345,171 @@ export interface Service {
   client_price: number | null
   status: { value: ServiceStatus; label: string }
   workers: ServiceWorkerPayload[]
+}
+
+/* ── Роботи обʼєкта ────────────────────────────────────────────── */
+
+/**
+ * Далі — те, чим живе вкладка «Послуги» в картці обʼєкта: там роботи вже не
+ * форма, а збережені записи. Правило грошей те саме, що й у формі, тільки
+ * рахується не з рядків, а з чисел: обсяг береться фактом, щойно він
+ * зʼявився, інакше планом.
+ */
+
+/** Значок стадії: список → робота йде → зроблено. */
+export const SERVICE_STATUS_ICONS: Record<ServiceStatus, IconName> = {
+  planned: 'estimate',
+  in_progress: 'clock',
+  done: 'check',
+}
+
+/** Місце статусу в житті роботи — за ним же їх і сортуємо. */
+export function serviceStatusIndex(status: ServiceStatus): number {
+  return SERVICE_STATUSES.findIndex((option) => option.value === status)
+}
+
+export function serviceUsedVolume(service: Service): { value: number; basis: 'fact' | 'plan' } {
+  const fact = service.actual_volume
+
+  return fact !== null && fact > 0
+    ? { value: fact, basis: 'fact' }
+    : { value: service.planned_volume, basis: 'plan' }
+}
+
+export function serviceRevenueTotal(service: Service): number {
+  return (service.client_price ?? 0) * serviceUsedVolume(service).value
+}
+
+/** Собівартість роботи — уся зарплата за нею. */
+export function serviceCostTotal(service: Service): number {
+  return service.workers.reduce((sum, worker) => sum + worker.volume * worker.rate, 0)
+}
+
+export function serviceLineProfit(service: Service): number {
+  return serviceRevenueTotal(service) - serviceCostTotal(service)
+}
+
+/** Скільки обсягу вже розписано на виконавців: решта висить нерозподіленою. */
+export function serviceAssignedVolume(service: Service): number {
+  return service.workers.reduce((sum, worker) => sum + worker.volume, 0)
+}
+
+export interface ServicesSummary {
+  /** Робіт усього — саме стільки рядків у таблиці. */
+  total: number
+  revenue: number
+  cost: number
+  profit: number
+  /** Скільки робіт на кожній стадії. */
+  byStatus: Record<ServiceStatus, number>
+}
+
+export function servicesSummary(services: Service[]): ServicesSummary {
+  const summary: ServicesSummary = {
+    total: services.length,
+    revenue: 0,
+    cost: 0,
+    profit: 0,
+    byStatus: { planned: 0, in_progress: 0, done: 0 },
+  }
+
+  for (const service of services) {
+    summary.byStatus[service.status.value] += 1
+    summary.revenue += serviceRevenueTotal(service)
+    summary.cost += serviceCostTotal(service)
+  }
+
+  summary.profit = summary.revenue - summary.cost
+
+  return summary
+}
+
+/** 1 робота, 2–4 роботи, 5+ робіт. */
+export function formatWorks(count: number): string {
+  const tail = count % 100 >= 11 && count % 100 <= 14 ? 0 : count % 10
+
+  if (tail === 1) {
+    return `${count} робота`
+  }
+
+  return tail >= 2 && tail <= 4 ? `${count} роботи` : `${count} робіт`
+}
+
+/* ── Фільтри та сортування ─────────────────────────────────────── */
+
+export type ServiceSort = 'added' | 'status' | 'name' | 'amount'
+
+export interface ServiceSortOption {
+  value: ServiceSort
+  label: string
+}
+
+export const SERVICE_SORTS: readonly ServiceSortOption[] = [
+  { value: 'added', label: 'Як додано' },
+  { value: 'status', label: 'За стадією' },
+  { value: 'name', label: 'За назвою' },
+  { value: 'amount', label: 'Найдорожчі' },
+]
+
+export interface ServiceFilters {
+  query: string
+  /** Порожній список означає «усі стадії». */
+  statuses: ServiceStatus[]
+  /** null — не важливо, хто виконує. У приватному просторі фільтра немає. */
+  employeeId: number | null
+  sort: ServiceSort
+}
+
+export function defaultServiceFilters(): ServiceFilters {
+  return { query: '', statuses: [], employeeId: null, sort: 'added' }
+}
+
+export function isDefaultServiceFilters(filters: ServiceFilters): boolean {
+  return (
+    filters.query.trim() === '' &&
+    filters.statuses.length === 0 &&
+    filters.employeeId === null &&
+    filters.sort === 'added'
+  )
+}
+
+function compareServices(left: Service, right: Service, sort: ServiceSort): number {
+  if (sort === 'status') {
+    return serviceStatusIndex(left.status.value) - serviceStatusIndex(right.status.value)
+  }
+
+  if (sort === 'name') {
+    return left.name.localeCompare(right.name, 'uk')
+  }
+
+  if (sort === 'amount') {
+    return serviceRevenueTotal(right) - serviceRevenueTotal(left)
+  }
+
+  return 0
+}
+
+/** Фільтрація й сортування одним проходом — рівно те, що показує таблиця. */
+export function filterServices(services: Service[], filters: ServiceFilters): Service[] {
+  const needle = filters.query.trim().toLowerCase()
+
+  const rows = services.filter((service) => {
+    if (filters.statuses.length > 0 && !filters.statuses.includes(service.status.value)) {
+      return false
+    }
+
+    // «Покажи все, де зайнятий Петров» — завантаження людини видно без
+    // окремого розділу «Співробітники».
+    if (
+      filters.employeeId !== null &&
+      !service.workers.some((worker) => worker.employee_id === filters.employeeId)
+    ) {
+      return false
+    }
+
+    return needle === '' || service.name.toLowerCase().includes(needle)
+  })
+
+  // Сортування стабільне, тож «Як додано» лишає роботи в порядку введення.
+  return rows.sort((left, right) => compareServices(left, right, filters.sort))
 }

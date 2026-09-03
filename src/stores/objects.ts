@@ -19,10 +19,13 @@ import {
   type PaymentPayload,
 } from '@/lib/finance'
 import {
+  formatWorks,
   normalizeServiceWorker,
   SERVICE_STATUS_LABELS,
   type Service,
   type ServicePayload,
+  type ServiceStatus,
+  type ServiceWorkerPayload,
 } from '@/lib/services'
 import {
   buildObjectPayload,
@@ -434,6 +437,135 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
+  /* ── Роботи обʼєкта ──────────────────────────────────────────── */
+
+  /**
+   * Поява роботи в журнал не пишеться — стрічка виводить її з обʼєкта. А от
+   * рух по стадіях, факт-обсяг і склад бригади не відновити з даних, тож їх
+   * фіксуємо окремими записами.
+   */
+  function addService(id: number, payload: ServicePayload): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    patch(id, { services: [...object.services, toService(payload, nextId(object.services))] })
+  }
+
+  function updateServices(
+    id: number,
+    serviceIds: number[],
+    change: (service: Service) => Service,
+  ): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    patch(id, {
+      services: object.services.map((item) => (serviceIds.includes(item.id) ? change(item) : item)),
+    })
+  }
+
+  /**
+   * Стадію міняють і поштучно, і на цілу бригаду, яка зайшла на обʼєкт, — тож
+   * приймаємо список. Роботи, які вже стоять у цій стадії, зміненими не
+   * рахуються: вони не мають потрапляти ні в стрічку, ні в підпис.
+   */
+  function setServiceStatus(id: number, serviceIds: number[], value: ServiceStatus): void {
+    const object = find(id)
+
+    if (object === null) {
+      return
+    }
+
+    const changed = object.services.filter(
+      (item) => serviceIds.includes(item.id) && item.status.value !== value,
+    )
+
+    if (changed.length === 0) {
+      return
+    }
+
+    const label = SERVICE_STATUS_LABELS[value]
+
+    updateServices(id, serviceIds, (item) => ({ ...item, status: { value, label } }))
+
+    const single = changed.length === 1 ? changed[0] : undefined
+
+    log(
+      id,
+      'service',
+      single === undefined ? 'Оновлено статуси робіт' : 'Змінено статус роботи',
+      single === undefined
+        ? `${formatWorks(changed.length)} → ${label}`
+        : `${single.name}: ${transition(single.status.label, label)}`,
+    )
+  }
+
+  /** Факт-обсяг — те, за чим рахують гроші: його поява варта запису. */
+  function setServiceFact(id: number, serviceId: number, volume: number | null): void {
+    const object = find(id)
+    const service = object?.services.find((item) => item.id === serviceId) ?? null
+
+    if (service === null || service.actual_volume === volume) {
+      return
+    }
+
+    updateServices(id, [serviceId], (item) => ({ ...item, actual_volume: volume }))
+
+    log(
+      id,
+      'service',
+      volume === null ? 'Прибрано факт-обсяг' : 'Внесено факт-обсяг',
+      volume === null
+        ? service.name
+        : `${service.name}: ${formatAmount(volume)} ${service.unit} з ${formatAmount(service.planned_volume)}`,
+    )
+  }
+
+  function setServiceWorkers(id: number, serviceId: number, workers: ServiceWorkerPayload[]): void {
+    const object = find(id)
+    const service = object?.services.find((item) => item.id === serviceId) ?? null
+
+    if (service === null) {
+      return
+    }
+
+    updateServices(id, [serviceId], (item) => ({ ...item, workers }))
+
+    const wage = workers.reduce((sum, worker) => sum + worker.volume * worker.rate, 0)
+
+    log(
+      id,
+      'service',
+      workers.length === 0 ? 'Знято виконавців' : 'Оновлено виконавців',
+      workers.length === 0
+        ? service.name
+        : `${service.name}: ${workers.length} чол., ЗП ${formatAmount(wage)} ₴`,
+    )
+  }
+
+  function removeService(id: number, serviceId: number): void {
+    const object = find(id)
+    const service = object?.services.find((item) => item.id === serviceId) ?? null
+
+    if (object === null || service === null) {
+      return
+    }
+
+    patch(id, { services: object.services.filter((item) => item.id !== serviceId) })
+    log(
+      id,
+      'service',
+      'Прибрано роботу',
+      `${service.name}, ${formatAmount(service.planned_volume)} ${service.unit}`,
+    )
+  }
+
   function remove(id: number): void {
     items.value = items.value.filter((item) => item.id !== id)
     persist()
@@ -506,9 +638,9 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Послуга у вигляді, у якому її поверне бекенд. */
-  function toService(payload: ServicePayload, index: number): Service {
+  function toService(payload: ServicePayload, id: number): Service {
     return {
-      id: index + 1,
+      id,
       name: payload.name,
       description: payload.description ?? null,
       unit: payload.unit,
@@ -571,7 +703,7 @@ export const useObjectsStore = defineStore('objects', () => {
       actual_finished_at: payload.actual_finished_at ?? null,
       cover: payload.cover ?? null,
       materials: (payload.materials ?? []).map((item, index) => toMaterial(item, index + 1)),
-      services: (payload.services ?? []).map(toService),
+      services: (payload.services ?? []).map((item, index) => toService(item, index + 1)),
       discount_percent: payload.discount_percent ?? null,
       discount_amount: payload.discount_amount ?? null,
       payments: (payload.payments ?? []).map(toPayment),
@@ -653,6 +785,11 @@ export const useObjectsStore = defineStore('objects', () => {
     setMaterialStatus,
     setMaterialApproved,
     removeMaterial,
+    addService,
+    setServiceStatus,
+    setServiceFact,
+    setServiceWorkers,
+    removeService,
     remove,
     photosVolatile,
     activityOf,

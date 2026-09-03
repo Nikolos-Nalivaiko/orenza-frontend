@@ -5,6 +5,7 @@ import MaterialsTab from '@/components/objects/MaterialsTab.vue'
 import ObjectDeleteDialog from '@/components/objects/ObjectDeleteDialog.vue'
 import ObjectHeader from '@/components/objects/ObjectHeader.vue'
 import ObjectOverview from '@/components/objects/ObjectOverview.vue'
+import ServicesTab from '@/components/objects/ServicesTab.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { todayIso, type ObjectStatus } from '@/lib/objects'
 import { objectSummary } from '@/lib/objectList'
@@ -131,6 +132,8 @@ function archiveFromDialog(): void {
       />
 
       <MaterialsTab v-else-if="tab === 'materials'" :object="object" />
+
+      <ServicesTab v-else-if="tab === 'services'" :object="object" />
 
       <!-- Решту вкладок робимо наступними кроками — поки кожна чесно каже,
            що в ній зʼявиться. -->
