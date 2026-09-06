@@ -506,36 +506,41 @@ export function dueState(client: number, paid: number): DueState {
   return paid > 0 ? 'partial' : 'none'
 }
 
+function paymentRank(payment: Payment): number {
+  if (payment.status.value === 'cancelled') {
+    return 2
+  }
+
+  return payment.status.value === 'paid' ? 0 : 1
+}
+
 /**
  * Порядок списку платежів: спочатку історія — що вже отримали, свіже зверху,
  * далі те, що ще чекаємо, найближче зверху. Скасовані йдуть у кінець.
+ *
+ * Окремо від sortPayments, бо той самий порядок потрібен і зведеному списку
+ * замовника, де рядок — це платіж разом із обʼєктом (див. lib/clients).
  */
-export function sortPayments(payments: Payment[], today: string): Payment[] {
-  function rank(payment: Payment): number {
-    if (payment.status.value === 'cancelled') {
-      return 2
-    }
+export function comparePayments(left: Payment, right: Payment): number {
+  const byGroup = paymentRank(left) - paymentRank(right)
 
-    return payment.status.value === 'paid' ? 0 : 1
+  if (byGroup !== 0) {
+    return byGroup
   }
 
-  return [...payments].sort((left, right) => {
-    const byGroup = rank(left) - rank(right)
+  // Платіж без дати не має витісняти той, у якого вона є.
+  const a = left.paid_at ?? ''
+  const b = right.paid_at ?? ''
 
-    if (byGroup !== 0) {
-      return byGroup
-    }
+  if (a === '' || b === '') {
+    return a === b ? 0 : a === '' ? 1 : -1
+  }
 
-    // Платіж без дати не має витісняти той, у якого вона є.
-    const a = left.paid_at ?? ''
-    const b = right.paid_at ?? ''
+  return paymentRank(left) === 0 ? b.localeCompare(a) : a.localeCompare(b)
+}
 
-    if (a === '' || b === '') {
-      return a === b ? 0 : a === '' ? 1 : -1
-    }
-
-    return rank(left) === 0 ? b.localeCompare(a) : a.localeCompare(b)
-  })
+export function sortPayments(payments: Payment[]): Payment[] {
+  return [...payments].sort(comparePayments)
 }
 
 /** 1 платіж, 2–4 платежі, 5+ платежів. */

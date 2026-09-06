@@ -76,6 +76,16 @@ const router = createRouter({
           component: () => import('@/views/ObjectView.vue'),
           meta: { title: 'Картка обʼєкта', section: 'objects' },
         },
+        /**
+         * Картка замовника. Свого розділу в меню замовники ще не мають —
+         * заходять у них з обʼєкта, тож активним лишається пункт «Обʼєкти».
+         */
+        {
+          path: 'clients/:id(\\d+)',
+          name: 'client',
+          component: () => import('@/views/ClientView.vue'),
+          meta: { title: 'Картка замовника', section: 'objects' },
+        },
         {
           path: 'objects/new',
           name: 'object-create',

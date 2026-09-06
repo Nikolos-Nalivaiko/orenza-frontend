@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import FinanceBreakdown from '@/components/objects/FinanceBreakdown.vue'
 import FinanceFigures from '@/components/objects/FinanceFigures.vue'
-import PaymentAddDialog from '@/components/objects/PaymentAddDialog.vue'
+import PaymentDialog from '@/components/objects/PaymentDialog.vue'
 import PaymentsList from '@/components/objects/PaymentsList.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { objectFinance, type PaymentPayload } from '@/lib/finance'
@@ -25,7 +25,17 @@ const objects = useObjectsStore()
 const details = ref(false)
 const adding = ref(false)
 
+/** Платіж, який зараз правлять; null — вікно заводить новий. */
+const editingId = ref<number | null>(null)
+
 const finance = computed(() => objectFinance(props.object, props.today))
+
+const editing = computed(
+  () => props.object.payments.find((item) => item.id === editingId.value) ?? undefined,
+)
+
+/** Вікно одне на дві дії — і на створення, і на правку. */
+const dialog = computed(() => adding.value || editing.value !== undefined)
 
 const discountLabel = computed(() => {
   const label = formatDiscount(props.object.discount_percent, props.object.discount_amount)
@@ -33,8 +43,19 @@ const discountLabel = computed(() => {
   return label === '' ? '' : `−${label}`
 })
 
-function add(payload: PaymentPayload): void {
-  objects.addPayment(props.object.id, payload)
+function save(payload: PaymentPayload): void {
+  if (editingId.value === null) {
+    objects.addPayment(props.object.id, payload)
+
+    return
+  }
+
+  objects.updatePayment(props.object.id, editingId.value, payload)
+}
+
+function close(): void {
+  adding.value = false
+  editingId.value = null
 }
 
 /** Гроші прийшли: дату надходження ставимо сьогоднішню, якщо її ще не було. */
@@ -75,17 +96,22 @@ function remove(paymentId: number): void {
         :payments="object.payments"
         :today="today"
         @add="adding = true"
+        @edit="editingId = $event"
         @receive="receive"
         @remove="remove"
       />
     </section>
 
-    <PaymentAddDialog
-      v-if="adding"
+    <!-- Ключ прив'язує вікно до платежу: поля читаються один раз, при
+         відкритті, тож перехід «новий → правка» має бути новим вікном. -->
+    <PaymentDialog
+      v-if="dialog"
+      :key="editingId ?? 'new'"
       :today="today"
       :due="finance.due"
-      @add="add"
-      @close="adding = false"
+      :payment="editing"
+      @save="save"
+      @close="close"
     />
   </div>
 </template>

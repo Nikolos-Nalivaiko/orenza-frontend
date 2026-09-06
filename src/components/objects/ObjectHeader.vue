@@ -164,7 +164,15 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
             <span class="client__mono" aria-hidden="true">{{ monogram(object.client.name) }}</span>
 
             <span class="client__body">
-              <span class="client__name">{{ object.client.name }}</span>
+              <!-- Звідси й заходять у замовника: інших дверей до його картки
+                   поки немає, а з обʼєкта питання «а що в нього ще» виникає
+                   найчастіше. -->
+              <RouterLink
+                class="client__name"
+                :to="{ name: 'client', params: { id: object.client.id } }"
+              >
+                {{ object.client.name }}
+              </RouterLink>
               <span class="client__contact">{{
                 object.client.contact || 'контакт не вказано'
               }}</span>
@@ -689,12 +697,22 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
 }
 
 .client__name {
+  display: block;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  color: inherit;
+  text-decoration: none;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.16s var(--ease);
+}
+
+.client__name:hover {
+  color: var(--brand-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .client__contact {

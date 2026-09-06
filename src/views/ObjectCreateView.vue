@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ClientPicker from '@/components/objects/ClientPicker.vue'
 import CoverPicker from '@/components/objects/CoverPicker.vue'
 import FinancePanel from '@/components/objects/FinancePanel.vue'
@@ -51,6 +51,7 @@ const TABS: readonly { key: TabKey; label: string }[] = [
   { key: 'finance', label: 'Фінанси' },
 ]
 
+const route = useRoute()
 const router = useRouter()
 const objects = useObjectsStore()
 const workspaces = useWorkspacesStore()
@@ -129,6 +130,14 @@ onMounted(() => {
   if (draft !== null) {
     Object.assign(form, draft)
     draftRestored.value = true
+  }
+
+  // Прийшли з картки замовника — він у формі вже стоїть. Персональну знижку
+  // підставить watch нижче, так само як і при виборі руками.
+  const clientId = Number(route.query.client)
+
+  if (Number.isInteger(clientId) && clientId > 0) {
+    form.clientId = clientId
   }
 })
 

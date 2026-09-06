@@ -2,13 +2,23 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useTemplateRef } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount, parseAmount } from '@/lib/amount'
-import { PAYMENT_DESCRIPTION_MAX, type PaymentPayload, type PaymentStatus } from '@/lib/finance'
+import {
+  PAYMENT_DESCRIPTION_MAX,
+  type Payment,
+  type PaymentPayload,
+  type PaymentStatus,
+} from '@/lib/finance'
 import { formatDay } from '@/lib/objects'
 
 /**
  * Платіж заводять на ходу, тож форма — два поля: сума й дата. Статус вирішує,
  * що це: гроші, які вже прийшли, чи ті, яких чекаємо. Другого вікна під
  * «графік надходжень» немає навмисно — це той самий список.
+ *
+ * Це саме вікно й виправляє платіж: помилку в сумі чи в коментарі помічають
+ * уже після збереження, і заводити запис наново заради однієї цифри —
+ * найгірше, що можна запропонувати. Поля ті самі, змінюється лише те, з чим
+ * порівнюється залишок.
  *
  * Сума з датою зібрані в одну плашку разом із підсумком: людина заводить
  * платіж, щоб побачити, що лишиться після нього, — тож відповідь стоїть
@@ -19,20 +29,24 @@ const props = defineProps<{
   today: string
   /** Скільки ще винен замовник — підказка для найчастішої суми. */
   due: number
+  /** Платіж, який правимо. Без нього вікно заводить новий. */
+  payment?: Payment
 }>()
 
-const emit = defineEmits<{ add: [payload: PaymentPayload]; close: [] }>()
+const emit = defineEmits<{ save: [payload: PaymentPayload]; close: [] }>()
 
 const titleId = useId()
 
 const field = useTemplateRef<HTMLInputElement>('field')
 
-const amount = ref('')
-const date = ref(props.today)
-const status = ref<PaymentStatus>('paid')
-const note = ref('')
+const editing = computed(() => props.payment !== undefined)
+
+const amount = ref(props.payment === undefined ? '' : String(props.payment.amount))
+const date = ref(props.payment === undefined ? props.today : (props.payment.paid_at ?? ''))
+const status = ref<PaymentStatus>(props.payment?.status.value ?? 'paid')
+const note = ref(props.payment?.name ?? '')
 /** Коментар за замовчуванням внутрішній: назовні він іде лише з дозволу. */
-const shared = ref(false)
+const shared = ref(props.payment?.client_visible ?? false)
 
 const problem = ref<{ amount?: string; date?: string }>({})
 
@@ -40,13 +54,22 @@ const parsed = computed(() => parseAmount(amount.value))
 
 const received = computed(() => status.value === 'paid')
 
+/**
+ * Залишок без цього платежу. Правлячи вже отриманий, ми фактично питаємо
+ * «скільки лишилось би без нього» — інакше підсумок унизу вікна рахував би
+ * ту саму суму двічі.
+ */
+const base = computed(
+  () => props.due + (props.payment?.status.value === 'paid' ? props.payment.amount : 0),
+)
+
 /** Найчастіша сума — рівно залишок: закриваємо обʼєкт одним платежем. */
-const suggestion = computed(() => (props.due > 0 ? props.due : null))
+const suggestion = computed(() => (base.value > 0 ? base.value : null))
 
 const filled = computed(() => (parsed.value !== null && parsed.value > 0 ? parsed.value : null))
 
 /** Що станеться з боргом після цього платежу — головне, заради чого його й вносять. */
-const left = computed(() => (filled.value === null ? null : props.due - filled.value))
+const left = computed(() => (filled.value === null ? null : base.value - filled.value))
 
 function fillAll(): void {
   if (suggestion.value !== null) {
@@ -81,7 +104,7 @@ function submit(): void {
 
   const comment = note.value.trim()
 
-  emit('add', {
+  emit('save', {
     // Назва платежу — той самий коментар; порожній замінюємо на зрозумілий
     // підпис, бо в стрічці подій рядок без назви ні про що не каже.
     name:
@@ -129,10 +152,16 @@ onBeforeUnmount(() => {
     >
       <header class="head">
         <div class="head__intro">
-          <h2 :id="titleId" class="display head__title">Новий платіж</h2>
+          <h2 :id="titleId" class="display head__title">
+            {{ editing ? 'Правка платежу' : 'Новий платіж' }}
+          </h2>
 
           <p class="head__sub">
-            <template v-if="due > 0">
+            <template v-if="editing && payment">
+              Було <strong>{{ formatAmount(payment.amount) }} ₴</strong>
+              <template v-if="payment.paid_at">, {{ formatDay(payment.paid_at) }}</template>
+            </template>
+            <template v-else-if="due > 0">
               Залишок до сплати — <strong>{{ formatAmount(due) }} ₴</strong>
             </template>
             <template v-else>За обʼєктом усе оплачено</template>
@@ -272,13 +301,16 @@ onBeforeUnmount(() => {
 
       <footer class="foot">
         <button type="submit" class="btn btn--primary btn--sm">
-          {{ received ? 'Додати платіж' : 'Запланувати' }}
+          <template v-if="editing">Зберегти зміни</template>
+          <template v-else>{{ received ? 'Додати платіж' : 'Запланувати' }}</template>
         </button>
         <button type="button" class="btn btn--ghost btn--sm" @click="emit('close')">
           Скасувати
         </button>
 
-        <span class="foot__hint">Enter — додати, Esc — закрити</span>
+        <span class="foot__hint">
+          Enter — {{ editing ? 'зберегти' : 'додати' }}, Esc — закрити
+        </span>
       </footer>
     </form>
   </div>

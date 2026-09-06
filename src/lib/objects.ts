@@ -60,13 +60,38 @@ export const OBJECT_STATUS_LABELS: Record<ObjectStatus, string> = {
 export interface Client {
   id: number
   name: string
+  /** Контактна особа: з ким саме розмовляють, якщо замовник — компанія. */
   contact: string
   phone: string
+  email: string
+  address: string
+  /**
+   * Як із цією людиною працювати: коли зручно телефонувати, на чому наполягає,
+   * про що домовились назавжди. Це опис самого замовника, а не хроніка подій —
+   * його читають перед дзвінком, тож він живе одним текстом, а не стрічкою.
+   */
+  notes: string
   /**
    * Персональна знижка, %. Це підказка: новий обʼєкт бере її за замовчуванням,
    * але в розрахунок іде знижка самого обʼєкта.
    */
   discount: number
+}
+
+/**
+ * Замовник із минулої сесії міг не мати пошти й адреси — їх завели разом із
+ * карткою замовника. Порожній рядок, а не null: поле просто ще не заповнили.
+ */
+export function normalizeClient(client: Client): Client {
+  return {
+    ...client,
+    contact: client.contact ?? '',
+    phone: client.phone ?? '',
+    email: client.email ?? '',
+    address: client.address ?? '',
+    notes: client.notes ?? '',
+    discount: client.discount ?? 0,
+  }
 }
 
 /** Ресурс обʼєкта у форматі майбутнього ObjectResource. */
@@ -130,6 +155,7 @@ export function normalizeObject(object: ConstructionObject): ConstructionObject 
   return {
     ...object,
     public_token: object.public_token ?? newPublicToken(),
+    client: object.client === null ? null : normalizeClient(object.client),
     payments: (object.payments ?? []).map((payment) => ({
       ...payment,
       client_visible: payment.client_visible ?? false,
@@ -424,6 +450,10 @@ export const DEMO_CLIENTS: readonly Client[] = [
     name: 'ТОВ «Мегабуд»',
     contact: 'Ірина Ковальчук',
     phone: '+380 67 214 30 11',
+    email: 'i.kovalchuk@megabud.ua',
+    address: 'вул. Антоновича, 44 · Київ',
+    notes:
+      'Погодження тільки через Ірину. Акти приймають до 25 числа, пізніше — уже наступний місяць.',
     discount: 5,
   },
   {
@@ -431,6 +461,9 @@ export const DEMO_CLIENTS: readonly Client[] = [
     name: 'ОСББ «Стеценка, 12»',
     contact: 'Олег Дяченко',
     phone: '+380 50 118 44 02',
+    email: 'osbb.stetsenka@gmail.com',
+    address: 'вул. Стеценка, 12 · Київ',
+    notes: '',
     discount: 0,
   },
   {
@@ -438,6 +471,9 @@ export const DEMO_CLIENTS: readonly Client[] = [
     name: 'ФОП Романюк О. П.',
     contact: 'Олександр Романюк',
     phone: '+380 63 902 77 15',
+    email: 'romaniuk.op@ukr.net',
+    address: 'с. Гатне · Київська обл.',
+    notes: 'Телефонувати після 18:00 — удень на обʼєкті. Любить фото з майданчика щотижня.',
     discount: 3,
   },
   {
@@ -445,9 +481,21 @@ export const DEMO_CLIENTS: readonly Client[] = [
     name: 'ТОВ «Стальпром»',
     contact: 'Марія Гнатюк',
     phone: '+380 44 501 22 90',
+    email: 'm.hnatiuk@stalprom.com.ua',
+    address: 'вул. Промислова, 8 · Львів',
+    notes: '',
     discount: 7,
   },
-  { id: 5, name: 'Приватний замовник', contact: 'Без компанії', phone: '', discount: 0 },
+  {
+    id: 5,
+    name: 'Приватний замовник',
+    contact: 'Без компанії',
+    phone: '',
+    email: '',
+    address: '',
+    notes: '',
+    discount: 0,
+  },
 ]
 
 /**

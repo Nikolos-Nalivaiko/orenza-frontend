@@ -13,9 +13,14 @@ import { formatDay } from '@/lib/objects'
 
 const props = defineProps<{ payments: Payment[]; today: string }>()
 
-const emit = defineEmits<{ add: []; receive: [id: number]; remove: [id: number] }>()
+const emit = defineEmits<{
+  add: []
+  edit: [id: number]
+  receive: [id: number]
+  remove: [id: number]
+}>()
 
-const rows = computed(() => sortPayments(props.payments, props.today))
+const rows = computed(() => sortPayments(props.payments))
 </script>
 
 <template>
@@ -82,6 +87,17 @@ const rows = computed(() => sortPayments(props.payments, props.today))
               Отримано
             </button>
 
+            <!-- Помилку в сумі чи підписі виправляють тут же: заводити платіж
+                 наново заради однієї цифри — надто дорога плата за друкарку. -->
+            <button
+              type="button"
+              class="ctl-drop ctl-drop--edit"
+              :aria-label="`Виправити платіж на ${formatAmount(row.amount)} ₴`"
+              @click="emit('edit', row.id)"
+            >
+              <AppIcon name="edit" />
+            </button>
+
             <button
               type="button"
               class="ctl-drop"
@@ -101,7 +117,7 @@ const rows = computed(() => sortPayments(props.payments, props.today))
 .pays {
   container-type: inline-size;
 
-  --cols: 116px 132px minmax(0, 1fr) 148px 128px;
+  --cols: 116px 132px minmax(0, 1fr) 148px 162px;
 
   display: grid;
   gap: 12px;
@@ -359,10 +375,19 @@ const rows = computed(() => sortPayments(props.payments, props.today))
   height: 13px;
 }
 
-/* Прибрати платіж — дія рідкісна: у спокої вона не тягне на себе погляд. */
+/* Правка й видалення — дії рідкісні: у спокої вони не тягнуть на себе погляд. */
 .cell--acts .ctl-drop {
   opacity: 0;
-  transition: opacity 0.16s var(--ease);
+  transition:
+    opacity 0.16s var(--ease),
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+/* Виправити — не те саме, що прибрати: червоне тло тут лякало б даремно. */
+.ctl-drop--edit:hover {
+  background: var(--paper-sunk);
+  color: var(--ink);
 }
 
 .prow:hover .cell--acts .ctl-drop,

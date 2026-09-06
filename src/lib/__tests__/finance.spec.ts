@@ -388,24 +388,21 @@ describe('dueState', () => {
 
 describe('sortPayments', () => {
   it('спочатку отримане — свіже зверху, далі очікуване — найближче зверху', () => {
-    const rows = sortPayments(
-      [
-        makeRecordPayment(1, { paid_at: '2026-06-01' }),
-        makeRecordPayment(2, {
-          status: { value: 'pending', label: PAYMENT_STATUS_LABELS.pending },
-          paid_at: '2026-09-01',
-        }),
-        makeRecordPayment(3, { paid_at: '2026-07-01' }),
-        makeRecordPayment(4, {
-          status: { value: 'pending', label: PAYMENT_STATUS_LABELS.pending },
-          paid_at: '2026-08-01',
-        }),
-        makeRecordPayment(5, {
-          status: { value: 'cancelled', label: PAYMENT_STATUS_LABELS.cancelled },
-        }),
-      ],
-      '2026-06-20',
-    )
+    const rows = sortPayments([
+      makeRecordPayment(1, { paid_at: '2026-06-01' }),
+      makeRecordPayment(2, {
+        status: { value: 'pending', label: PAYMENT_STATUS_LABELS.pending },
+        paid_at: '2026-09-01',
+      }),
+      makeRecordPayment(3, { paid_at: '2026-07-01' }),
+      makeRecordPayment(4, {
+        status: { value: 'pending', label: PAYMENT_STATUS_LABELS.pending },
+        paid_at: '2026-08-01',
+      }),
+      makeRecordPayment(5, {
+        status: { value: 'cancelled', label: PAYMENT_STATUS_LABELS.cancelled },
+      }),
+    ])
 
     expect(rows.map((row) => row.id)).toEqual([3, 1, 4, 2, 5])
   })

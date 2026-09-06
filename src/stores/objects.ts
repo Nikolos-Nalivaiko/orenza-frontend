@@ -37,6 +37,7 @@ import {
   formatDiscount,
   isDemoObject,
   newPublicToken,
+  normalizeClient,
   normalizeObject,
   OBJECT_STATUS_LABELS,
   type Client,
@@ -45,6 +46,7 @@ import {
   type ObjectForm,
   type ObjectStatus,
 } from '@/lib/objects'
+import { buildClientPayload, type ClientForm } from '@/lib/clients'
 import { transition, type ActivityKind, type ActivityRecord } from '@/lib/activity'
 import { photosOf, type ObjectPhoto } from '@/lib/photos'
 
@@ -624,6 +626,61 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
+  /**
+   * Правка платежу: сума з датою й коментар. Помилку в них помічають уже
+   * після збереження — і виправити її має бути дешевше, ніж завести платіж
+   * наново. Опис, який колись прийшов із форми створення обʼєкта, лишаємо як
+   * є: тут його не показують, тож і затирати його порожнім значенням нема за
+   * чим.
+   */
+  function updatePayment(id: number, paymentId: number, payload: PaymentPayload): void {
+    const object = find(id)
+    const before = object?.payments.find((item) => item.id === paymentId) ?? null
+
+    if (object === null || before === null) {
+      return
+    }
+
+    const after: Payment = {
+      ...before,
+      name: payload.name,
+      amount: payload.amount,
+      status: { value: payload.status, label: PAYMENT_STATUS_LABELS[payload.status] },
+      paid_at: payload.paid_at ?? null,
+      client_visible: payload.client_visible ?? false,
+    }
+
+    patch(id, {
+      payments: object.payments.map((item) => (item.id === paymentId ? after : item)),
+    })
+
+    // У стрічку йде та зміна, заради якої платіж і відкривали: спочатку
+    // гроші, потім стан, і лише потім — підпис.
+    if (before.amount !== after.amount) {
+      log(
+        id,
+        'payment',
+        'Виправлено суму платежу',
+        transition(`${formatAmount(before.amount)} ₴`, `${formatAmount(after.amount)} ₴`),
+      )
+
+      return
+    }
+
+    if (before.status.value !== after.status.value) {
+      log(
+        id,
+        'payment',
+        'Змінено статус платежу',
+        `${formatAmount(after.amount)} ₴: ${transition(before.status.label, after.status.label)}`,
+      )
+
+      return
+    }
+
+    log(id, 'payment', 'Виправлено платіж', `${formatAmount(after.amount)} ₴, ${after.name}`)
+  }
+
   /** Гроші прийшли — платіж із очікуваного стає отриманим, і навпаки. */
   function setPaymentStatus(
     id: number,
@@ -688,6 +745,10 @@ export const useObjectsStore = defineStore('objects', () => {
     return id === null ? null : (clients.value.find((client) => client.id === id) ?? null)
   }
 
+  function persistClients(): void {
+    write(CLIENTS_KEY, clients.value)
+  }
+
   async function fetchClients(): Promise<void> {
     isLoadingClients.value = true
 
@@ -695,9 +756,17 @@ export const useObjectsStore = defineStore('objects', () => {
       // TODO: GET /api/v1/workspaces/{id}/clients
       await progress.track(delay(420))
 
-      const stored = readList<Client>(CLIENTS_KEY, [])
+      const stored = readList<Client>(CLIENTS_KEY, []).map(normalizeClient)
 
-      clients.value = [...DEMO_CLIENTS, ...stored]
+      // Демозамовники сіються один раз — далі вони звичайні записи, яким
+      // правлять контакти й знижку нарівні з власними.
+      const seeded = DEMO_CLIENTS.filter((demo) => !stored.some((item) => item.id === demo.id))
+
+      clients.value = [...seeded, ...stored].sort((left, right) => left.id - right.id)
+
+      if (seeded.length > 0) {
+        persistClients()
+      }
     } finally {
       // Навіть якщо запит впаде, селект не має лишитись у скелетоні назавжди.
       isLoadingClients.value = false
@@ -711,17 +780,60 @@ export const useObjectsStore = defineStore('objects', () => {
       name: name.trim(),
       contact: 'Створено з картки обʼєкта',
       phone: '',
-      // Персональну знижку заводять у довіднику замовників, не з форми обʼєкта.
+      email: '',
+      address: '',
+      notes: '',
+      // Персональну знижку заводять у картці замовника, не з форми обʼєкта.
       discount: 0,
     }
 
     clients.value = [...clients.value, client]
-    write(
-      CLIENTS_KEY,
-      clients.value.filter((item) => !DEMO_CLIENTS.some((demo) => demo.id === item.id)),
-    )
+    persistClients()
 
     return client
+  }
+
+  /* ── Картка замовника ────────────────────────────────────────── */
+
+  /**
+   * Обʼєкт носить копію замовника — саме її показують список і картка. Тож
+   * правка в довіднику одразу їде і в обʼєкти: інакше в шапці обʼєкта лишався
+   * б старий телефон, і власник дзвонив би за ним.
+   */
+  function patchClient(id: number, changes: Partial<Client>): void {
+    const client = findClient(id)
+
+    if (client === null) {
+      return
+    }
+
+    const next = { ...client, ...changes }
+
+    clients.value = clients.value.map((item) => (item.id === id ? next : item))
+    persistClients()
+
+    items.value = items.value.map((object) =>
+      object.client?.id === id ? { ...object, client: next } : object,
+    )
+    persist()
+  }
+
+  /** Контакти замовника — те, за чим із ним звʼязуються; правлять їх з картки. */
+  function updateClient(id: number, form: ClientForm): void {
+    patchClient(id, buildClientPayload(form))
+  }
+
+  /** Опис замовника: як із ним працювати. Один текст, а не стрічка подій. */
+  function setClientNotes(id: number, notes: string): void {
+    patchClient(id, { notes: notes.trim() })
+  }
+
+  /**
+   * Персональна знижка — підказка для нових обʼєктів: уже заведені рахуються
+   * за власною знижкою, тож перерахунку тут не відбувається.
+   */
+  function setClientDiscount(id: number, discount: number): void {
+    patchClient(id, { discount })
   }
 
   /** Позиція матеріалу у вигляді, у якому її поверне бекенд. */
@@ -899,6 +1011,7 @@ export const useObjectsStore = defineStore('objects', () => {
     setServiceWorkers,
     removeService,
     addPayment,
+    updatePayment,
     setPaymentStatus,
     removePayment,
     remove,
@@ -912,6 +1025,9 @@ export const useObjectsStore = defineStore('objects', () => {
     findClient,
     fetchClients,
     addClient,
+    updateClient,
+    setClientNotes,
+    setClientDiscount,
     create,
     readDraft,
     saveDraft,

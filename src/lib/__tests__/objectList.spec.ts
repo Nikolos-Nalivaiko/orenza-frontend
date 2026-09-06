@@ -25,6 +25,9 @@ const CLIENT: Client = {
   name: 'ТОВ «Мегабуд»',
   contact: 'Ірина Ковальчук',
   phone: '',
+  email: '',
+  address: '',
+  notes: '',
   discount: 5,
 }
 
