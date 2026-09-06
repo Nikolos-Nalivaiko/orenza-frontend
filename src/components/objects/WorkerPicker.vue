@@ -2,7 +2,7 @@
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { useDismissable } from '@/composables/useDismissable'
-import { employeeMeta, type Employee } from '@/lib/employees'
+import { employeeMeta, isActiveEmployee, type Employee } from '@/lib/employees'
 import { monogram } from '@/lib/workspaces'
 
 const props = defineProps<{
@@ -32,10 +32,16 @@ const selected = computed(
   () => props.employees.find((employee) => employee.id === model.value) ?? null,
 )
 
-/** Уже зайняті ховаємо, але свій вибір лишаємо — інакше він зникне зі списку. */
+/**
+ * Уже зайняті ховаємо, але свій вибір лишаємо — інакше він зникне зі списку.
+ * Так само й з неактивними: на нові роботи їх не пропонуємо, але людину, яка
+ * пішла вже після призначення, з її ж рядка не викидаємо.
+ */
 const free = computed(() =>
   props.employees.filter(
-    (employee) => employee.id === model.value || !(props.taken ?? []).includes(employee.id),
+    (employee) =>
+      employee.id === model.value ||
+      (isActiveEmployee(employee) && !(props.taken ?? []).includes(employee.id)),
   ),
 )
 

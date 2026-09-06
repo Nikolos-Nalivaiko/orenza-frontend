@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import type { Employee } from '@/lib/employees'
 import { isDefaultServiceFilters, SERVICE_SORTS, type ServiceFilters } from '@/lib/services'
@@ -7,8 +8,9 @@ import { isDefaultServiceFilters, SERVICE_SORTS, type ServiceFilters } from '@/l
  * Пошук, виконавець і сортування. Стадії сюди не йдуть — вони вже стоять у
  * зведенні над таблицею й фільтрують звідти.
  *
- * Фільтр за виконавцем відповідає на питання «де зайнятий Петров» — це
- * найближче, що є до завантаження людини, поки немає розділу співробітників.
+ * Фільтр за виконавцем відповідає на питання «де зайнятий Петров». Щойно
+ * людину обрали, поруч зʼявляється вхід у її картку: наступне питання після
+ * «де він зайнятий» — «скільки ми йому винні», а відповідь на нього там.
  */
 
 defineProps<{
@@ -48,6 +50,16 @@ const filters = defineModel<ServiceFilters>({ required: true })
         {{ employee.name }}
       </option>
     </select>
+
+    <RouterLink
+      v-if="filters.employeeId !== null"
+      class="who"
+      :to="{ name: 'employee', params: { id: filters.employeeId } }"
+      title="Обʼєкти, нарахування та ЗП цієї людини"
+    >
+      <AppIcon name="user" />
+      Картка виконавця
+    </RouterLink>
 
     <select v-model="filters.sort" class="ctl ctl--select pick" aria-label="Сортування">
       <option v-for="option in SERVICE_SORTS" :key="option.value" :value="option.value">
@@ -137,6 +149,35 @@ const filters = defineModel<ServiceFilters>({ required: true })
   background-position:
     right 14px center,
     right 9px center;
+}
+
+/* Вхід у картку людини зʼявляється лише разом із обраним виконавцем. */
+.who {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 15px 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    border-color 0.16s var(--ease),
+    background-color 0.16s var(--ease);
+}
+
+.who:hover {
+  border-color: var(--ink);
+  background: var(--paper-sunk);
+}
+
+.who :deep(.icon) {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-faint);
 }
 
 .count {

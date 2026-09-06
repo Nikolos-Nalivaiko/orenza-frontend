@@ -264,6 +264,15 @@ export function formatDay(iso: string): string {
   return date === null ? '' : dayFormat.format(date).replace(/\s*р\.$/, '')
 }
 
+const monthFormat = new Intl.DateTimeFormat('uk-UA', { month: 'long' })
+
+/** «вересень» — підпис до цифри за місяць. */
+export function formatMonth(iso: string): string {
+  const date = parseDay(iso)
+
+  return date === null ? '' : monthFormat.format(date)
+}
+
 /** Різниця в днях; null, якщо хоч однієї дати немає. */
 export function daysBetween(from: string, to: string): number | null {
   const start = parseDay(from)

@@ -82,6 +82,16 @@ const router = createRouter({
           component: () => import('@/views/ClientsView.vue'),
           meta: { title: 'Замовники', subtitle: 'Довідник замовників простору' },
         },
+        /**
+         * Картка співробітника. Свого списку розділ «Команда» ще не має —
+         * заходять у людину з робіт обʼєкта, тож активним лишається він.
+         */
+        {
+          path: 'team/:id(\\d+)',
+          name: 'employee',
+          component: () => import('@/views/EmployeeView.vue'),
+          meta: { title: 'Картка співробітника', section: 'team' },
+        },
         /** Картка замовника — вкладений екран розділу «Замовники». */
         {
           path: 'clients/:id(\\d+)',
