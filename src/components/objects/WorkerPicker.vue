@@ -13,6 +13,8 @@ const props = defineProps<{
   invalid?: boolean
 }>()
 
+const emit = defineEmits<{ create: [name: string] }>()
+
 const model = defineModel<number | null>({ required: true })
 
 const id = useId()
@@ -57,6 +59,24 @@ const matches = computed(() => {
   )
 })
 
+/**
+ * Людину частіше заводять саме тут: бригадир назвав прізвище, а в довіднику
+ * його ще немає. Кидати заповнену роботу заради довідника — найгірше, що
+ * можна запропонувати, тож заводимо з одного імені прямо зі списку.
+ */
+const newName = computed(() => query.value.trim())
+const canCreate = computed(
+  () =>
+    newName.value.length >= 2 &&
+    !props.employees.some(
+      (employee) => employee.name.toLowerCase() === newName.value.toLowerCase(),
+    ),
+)
+
+/** Місць у списку на одне більше, коли внизу стоїть «Додати». */
+const total = computed(() => matches.value.length + (canCreate.value ? 1 : 0))
+const creatingActive = computed(() => canCreate.value && active.value === matches.value.length)
+
 watch(query, () => (active.value = 0))
 
 function optionId(index: number): string {
@@ -96,14 +116,19 @@ function choose(employee: Employee): void {
   trigger.value?.focus()
 }
 
-function move(step: number): void {
-  const total = matches.value.length
+/** Батько заводить людину й одразу віддає її id назад через модель. */
+function createFromQuery(): void {
+  emit('create', newName.value)
+  hide()
+  trigger.value?.focus()
+}
 
-  if (total === 0) {
+function move(step: number): void {
+  if (total.value === 0) {
     return
   }
 
-  active.value = (active.value + step + total) % total
+  active.value = (active.value + step + total.value) % total.value
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -126,6 +151,12 @@ function onKeydown(event: KeyboardEvent): void {
 
   // Форма не має відправлятись, поки людина обирає у списку.
   event.preventDefault()
+
+  if (creatingActive.value) {
+    createFromQuery()
+
+    return
+  }
 
   const employee = matches.value[active.value]
 
@@ -175,7 +206,7 @@ function onKeydown(event: KeyboardEvent): void {
             aria-label="Пошук співробітника"
             placeholder="Ім’я, спеціальність або бригада"
             :aria-controls="listId"
-            :aria-activedescendant="matches.length > 0 ? optionId(active) : undefined"
+            :aria-activedescendant="total > 0 ? optionId(active) : undefined"
             @keydown="onKeydown"
           />
         </div>
@@ -204,8 +235,28 @@ function onKeydown(event: KeyboardEvent): void {
             <AppIcon v-if="employee.id === model" name="check" class="opt__tick" />
           </li>
 
-          <li v-if="matches.length === 0" class="menu__note">
-            Нікого не знайшли. Довідник співробітників зʼявиться в наступному блоці.
+          <li
+            v-if="canCreate"
+            :id="optionId(matches.length)"
+            class="opt opt--new"
+            :class="{ 'opt--on': creatingActive }"
+            role="option"
+            :aria-selected="false"
+            @mouseenter="active = matches.length"
+            @click="createFromQuery"
+          >
+            <span class="opt__mono opt__mono--new" aria-hidden="true">
+              <AppIcon name="plus" />
+            </span>
+
+            <span class="opt__body">
+              <span class="opt__name">Додати «{{ newName }}»</span>
+              <span class="opt__meta">Нова людина в довіднику простору</span>
+            </span>
+          </li>
+
+          <li v-if="total === 0" class="menu__note">
+            Нікого не знайшли. Введіть імʼя — і заведемо нового виконавця.
           </li>
         </ul>
       </div>
@@ -401,6 +452,22 @@ function onKeydown(event: KeyboardEvent): void {
 .opt--on .opt__mono {
   background: var(--ink);
   color: #fff;
+}
+
+/* Рядок «Додати» — дія, а не людина: значок замість монограми. */
+.opt__mono--new {
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.opt--on .opt__mono--new {
+  background: var(--brand);
+  color: #08210a;
+}
+
+.opt__mono--new :deep(.icon) {
+  width: 14px;
+  height: 14px;
 }
 
 .opt__body {

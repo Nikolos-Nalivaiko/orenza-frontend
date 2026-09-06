@@ -75,6 +75,32 @@ export const useEmployeesStore = defineStore('employees', () => {
     }
   }
 
+  /**
+   * Людину заводять двома шляхами: повною формою з довідника й одним іменем
+   * прямо з бригади на роботі. Запис виходить той самий — різниться лише те,
+   * скільки про людину відомо на момент створення.
+   */
+  function createEmployee(form: EmployeeForm): Employee {
+    const employee: Employee = {
+      // TODO: POST /api/v1/workspaces/{id}/employees — id віддасть бекенд.
+      id: Math.max(100, ...items.value.map((item) => item.id)) + 1,
+      ...buildEmployeePayload(form),
+      status: 'active',
+      notes: '',
+      created_at: new Date().toISOString(),
+    }
+
+    items.value = [...items.value, employee]
+    write(items.value)
+
+    return employee
+  }
+
+  /** Нового виконавця заводять прямо з бригади — щоб не кидати введене. */
+  function addEmployee(name: string): Employee {
+    return createEmployee({ name, role: '', crew: '', phone: '', email: '' })
+  }
+
   function patch(id: number, changes: Partial<Employee>): void {
     const employee = find(id)
 
@@ -109,6 +135,8 @@ export const useEmployeesStore = defineStore('employees', () => {
     isLoading,
     find,
     fetchEmployees,
+    createEmployee,
+    addEmployee,
     updateEmployee,
     setEmployeeStatus,
     setEmployeeNotes,

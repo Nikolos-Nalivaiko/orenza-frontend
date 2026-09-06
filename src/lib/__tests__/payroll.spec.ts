@@ -65,6 +65,28 @@ describe('employeeCharges', () => {
     expect(charges[0]?.amount).toBe(40_000)
   })
 
+  it('рахує частку людини від обсягу роботи — факту, коли він є', () => {
+    const [byPlan] = employeeCharges(
+      [makeObject({ services: [service({ workers: [worker({ volume: 25 })] })] })],
+      1,
+    )
+
+    expect(byPlan?.serviceVolume).toBe(100)
+    expect(byPlan?.share).toBe(0.25)
+
+    const [byFact] = employeeCharges(
+      [
+        makeObject({
+          services: [service({ actual_volume: 50, workers: [worker({ volume: 25 })] })],
+        }),
+      ],
+      1,
+    )
+
+    expect(byFact?.serviceVolume).toBe(50)
+    expect(byFact?.share).toBe(0.5)
+  })
+
   it('одна людина двічі в бригаді дає два різні рядки', () => {
     const charges = employeeCharges(
       [
@@ -200,6 +222,30 @@ describe('payrollTotals', () => {
 })
 
 describe('groupByObject', () => {
+  it('усередині обʼєкта ставить незакриті роботи зверху', () => {
+    const groups = groupByObject(
+      employeeCharges(
+        [
+          makeObject({
+            services: [
+              service({
+                id: 1,
+                name: 'Закрита',
+                status: { value: 'done', label: SERVICE_STATUS_LABELS.done },
+                workers: [worker()],
+              }),
+              service({ id: 2, name: 'У роботі', workers: [worker({ volume: 10 })] }),
+            ],
+          }),
+        ],
+        1,
+      ),
+    )
+
+    expect(groups[0]?.rows.map((row) => row.serviceName)).toEqual(['У роботі', 'Закрита'])
+    expect(groups[0]?.done).toBe(1)
+  })
+
   it('збирає роботи одного обʼєкта в один блок і ставить живі зверху', () => {
     const charges = employeeCharges(
       [
@@ -222,6 +268,7 @@ describe('groupByObject', () => {
     expect(groups[0]?.rows).toHaveLength(2)
     expect(groups[0]?.amount).toBe(60_000)
     expect(groups[0]?.busy).toBe(true)
+    expect(groups[0]?.address).toBe('вул. Стеценка, 12 · Київ')
     expect(groups[1]?.busy).toBe(false)
   })
 })

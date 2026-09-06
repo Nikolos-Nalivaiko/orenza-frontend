@@ -11,8 +11,8 @@
  * завели, — у роботі обʼєкта.
  */
 
-import { formatMonth, type ConstructionObject } from '@/lib/objects'
-import type { ServiceStatus } from '@/lib/services'
+import { formatMonth, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
+import { serviceUsedVolume, type ServiceStatus } from '@/lib/services'
 
 /* ── Нарахування ───────────────────────────────────────────────── */
 
@@ -26,6 +26,9 @@ export interface PayrollCharge {
   id: string
   objectId: number
   objectName: string
+  objectAddress: string
+  /** Статус самого обʼєкта — щоб картка не вигадувала свій. */
+  objectStatus: { value: ObjectStatus; label: string }
   /** Обʼєкт в архіві — нарахування лишається, але воно вже з історії. */
   archived: boolean
   serviceId: number
@@ -33,6 +36,10 @@ export interface PayrollCharge {
   status: { value: ServiceStatus; label: string }
   unit: string
   volume: number
+  /** Увесь обсяг роботи, на який ділиться бригада. */
+  serviceVolume: number
+  /** Частка людини в обсязі роботи, 0…1: скільки з неї взяв саме він. */
+  share: number
   rate: number
   amount: number
   /** День, яким лягає нарахування; null — дат в обʼєкті немає взагалі. */
@@ -67,6 +74,10 @@ export function employeeCharges(
 
   for (const object of objects) {
     for (const service of object.services) {
+      // Обсяг роботи береться так само, як у її картці: факт, щойно він
+      // зʼявився, інакше план — інакше частка людини рахувалась би від нуля.
+      const whole = serviceUsedVolume(service).value
+
       service.workers.forEach((worker, index) => {
         if (worker.employee_id !== employeeId) {
           return
@@ -76,12 +87,16 @@ export function employeeCharges(
           id: `${object.id}-${service.id}-${index}`,
           objectId: object.id,
           objectName: object.name,
+          objectAddress: object.address,
+          objectStatus: object.status,
           archived: object.archived_at !== null,
           serviceId: service.id,
           serviceName: service.name,
           status: service.status,
           unit: service.unit,
           volume: worker.volume,
+          serviceVolume: whole,
+          share: whole > 0 ? Math.min(1, worker.volume / whole) : 0,
           rate: worker.rate,
           amount: worker.volume * worker.rate,
           at: chargeDay(object, service.status.value),
@@ -167,9 +182,13 @@ export function payrollMonthLabel(today: string): string {
 export interface PayrollObjectGroup {
   objectId: number
   objectName: string
+  address: string
+  status: { value: ObjectStatus; label: string }
   archived: boolean
   rows: PayrollCharge[]
   amount: number
+  /** Скільки з цих робіт уже закрито — підпис «2 з 3 закрито». */
+  done: number
   /** Хоч одна незакрита робота — людина на обʼєкті ще зайнята. */
   busy: boolean
 }
@@ -181,9 +200,12 @@ export function groupByObject(charges: PayrollCharge[]): PayrollObjectGroup[] {
     const group = groups.get(charge.objectId) ?? {
       objectId: charge.objectId,
       objectName: charge.objectName,
+      address: charge.objectAddress,
+      status: charge.objectStatus,
       archived: charge.archived,
       rows: [],
       amount: 0,
+      done: 0,
       busy: false,
     }
 
@@ -191,7 +213,20 @@ export function groupByObject(charges: PayrollCharge[]): PayrollObjectGroup[] {
     group.amount += charge.amount
     group.busy = group.busy || (!charge.archived && charge.status.value !== 'done')
 
+    if (charge.status.value === 'done') {
+      group.done += 1
+    }
+
     groups.set(charge.objectId, group)
+  }
+
+  for (const group of groups.values()) {
+    // Незакриті роботи зверху: саме вони відповідають на «що він робить зараз».
+    group.rows.sort((left, right) => {
+      const closed = Number(left.status.value === 'done') - Number(right.status.value === 'done')
+
+      return closed === 0 ? right.amount - left.amount : closed
+    })
   }
 
   // Живі обʼєкти зверху: архів — це вже історія, а не місце роботи.

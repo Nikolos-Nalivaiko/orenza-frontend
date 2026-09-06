@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import TextField from '@/components/ui/TextField.vue'
 import { formatAmount } from '@/lib/amount'
@@ -63,9 +64,9 @@ function save(): void {
 <template>
   <header class="ehead">
     <p class="eyebrow ehead__crumbs">
-      Команда
+      <RouterLink class="ehead__crumb" :to="{ name: 'team' }">Команда</RouterLink>
       <span aria-hidden="true">/</span>
-      Картка співробітника
+      Картка
     </p>
 
     <section class="hero">
@@ -248,6 +249,16 @@ function save(): void {
   align-items: center;
   gap: 7px;
   margin-bottom: 2px;
+}
+
+.ehead__crumb {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.16s var(--ease);
+}
+
+.ehead__crumb:hover {
+  color: var(--ink);
 }
 
 /* ── Карта співробітника ───────────────────────────────────────── */

@@ -10,7 +10,7 @@ import LoginView from '@/views/LoginView.vue'
  * справжні маршрути: адреса, заголовок і активний пункт меню працюють.
  */
 /** Розділи з власним екраном — заглушка їх не стосується. */
-const READY = ['dashboard', 'objects', 'clients']
+const READY = ['dashboard', 'objects', 'clients', 'team']
 
 const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
   .filter((item) => !READY.includes(item.name))
@@ -82,10 +82,13 @@ const router = createRouter({
           component: () => import('@/views/ClientsView.vue'),
           meta: { title: 'Замовники', subtitle: 'Довідник замовників простору' },
         },
-        /**
-         * Картка співробітника. Свого списку розділ «Команда» ще не має —
-         * заходять у людину з робіт обʼєкта, тож активним лишається він.
-         */
+        {
+          path: 'team',
+          name: 'team',
+          component: () => import('@/views/EmployeesView.vue'),
+          meta: { title: 'Команда', subtitle: 'Співробітники простору та їхнє завантаження' },
+        },
+        /** Картка співробітника — вкладений екран розділу «Команда». */
         {
           path: 'team/:id(\\d+)',
           name: 'employee',

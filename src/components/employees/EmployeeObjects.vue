@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
+import StatusBadge from '@/components/objects/StatusBadge.vue'
 import { formatAmount } from '@/lib/amount'
 import { groupByObject, type PayrollCharge } from '@/lib/payroll'
 import { formatWorks } from '@/lib/services'
@@ -9,13 +10,22 @@ import { formatWorks } from '@/lib/services'
  * Де людина задіяна. Це не нова сутність, а той самий склад бригади, тільки з
  * іншого боку: не «хто на цій роботі», а «на яких роботах ця людина».
  *
- * Групуємо по обʼєктах: три роботи на одній будові — це одне місце роботи, а
- * не три різні, і саме так їх тримає в голові власник.
+ * Один обʼєкт — одна картка: три роботи на одній будові це одне місце роботи,
+ * а не три різні. Картка ціла веде в обʼєкт, бо саме туди йдуть далі — щось
+ * поправити в роботі можна лише там.
+ *
+ * У рядку роботи головне не сума (вона на вкладці «Фінанси»), а частка: 50 із
+ * 120 м³ — це і є задіювання людини, і смуга під рядком показує його одразу,
+ * без ділення в голові.
  */
 
 const props = defineProps<{ charges: PayrollCharge[] }>()
 
 const groups = computed(() => groupByObject(props.charges))
+
+function percent(share: number): number {
+  return Math.round(share * 100)
+}
 </script>
 
 <template>
@@ -25,213 +35,80 @@ const groups = computed(() => groupByObject(props.charges))
       будь-якого обʼєкта, тут зʼявиться і обʼєкт, і обсяг, і статус.
     </p>
 
-    <article v-for="group in groups" :key="group.objectId" class="group">
-      <header class="group__head">
-        <h2 class="group__title">
-          <RouterLink class="group__link" :to="{ name: 'object', params: { id: group.objectId } }">
-            {{ group.objectName }}
-          </RouterLink>
+    <article
+      v-for="group in groups"
+      :key="group.objectId"
+      class="site"
+      :class="{ 'site--off': group.archived }"
+    >
+      <header class="site__head">
+        <div class="site__intro">
+          <h2 class="site__title">
+            <RouterLink class="site__link" :to="{ name: 'object', params: { id: group.objectId } }">
+              {{ group.objectName }}
+            </RouterLink>
+          </h2>
 
+          <p class="site__where">{{ group.address }}</p>
+        </div>
+
+        <div class="site__marks">
           <span v-if="group.archived" class="tag">Архів</span>
-          <span v-else-if="group.busy" class="tag tag--on">Зайнятий</span>
-          <span v-else class="tag">Завершено</span>
-        </h2>
-
-        <p class="group__meta">
-          {{ formatWorks(group.rows.length) }} · нараховано
-          <strong>{{ formatAmount(group.amount) }} ₴</strong>
-        </p>
+          <StatusBadge v-else :status="group.status.value" :label="group.status.label" />
+        </div>
       </header>
 
-      <div class="cols" aria-hidden="true">
-        <span>Робота</span>
-        <span class="cols__num">Обсяг виконавця</span>
-        <span>Статус роботи</span>
-      </div>
+      <ul class="works">
+        <li v-for="row in group.rows" :key="row.id" class="work">
+          <span class="work__dot" :class="`work__dot--${row.status.value}`" aria-hidden="true" />
 
-      <ul class="rows">
-        <li v-for="row in group.rows" :key="row.id" class="row">
-          <p class="cell cell--name" data-label="Робота">{{ row.serviceName }}</p>
+          <p class="work__name">{{ row.serviceName }}</p>
 
-          <p class="cell cell--num" data-label="Обсяг виконавця">
-            {{ formatAmount(row.volume) }} <span class="unit">{{ row.unit }}</span>
+          <p class="work__vol">
+            {{ formatAmount(row.volume) }}
+            <span class="work__of">з {{ formatAmount(row.serviceVolume) }} {{ row.unit }}</span>
           </p>
 
-          <p class="cell" data-label="Статус роботи">
-            <span class="chip" :class="`chip--${row.status.value}`">
-              <span class="chip__dot" aria-hidden="true" />
-              {{ row.status.label }}
-            </span>
-          </p>
+          <p class="work__state">{{ row.status.label }}</p>
+
+          <p class="work__share">{{ percent(row.share) }}% обсягу</p>
+
+          <span class="bar">
+            <span
+              class="bar__fill"
+              :class="`bar__fill--${row.status.value}`"
+              :style="{ width: `${percent(row.share)}%` }"
+            />
+          </span>
         </li>
       </ul>
+
+      <footer class="site__foot">
+        <p class="site__works">
+          {{ formatWorks(group.rows.length) }}
+          <template v-if="group.done > 0">· {{ group.done }} закрито</template>
+        </p>
+
+        <p class="site__sum">
+          Нараховано <strong>{{ formatAmount(group.amount) }} ₴</strong>
+        </p>
+      </footer>
     </article>
   </section>
 </template>
 
 <style scoped>
+/* Картки стають у два стовпці, щойно місця вистачає: у людини їх буває
+   з десяток, і одна колонка перетворює вкладку на довгу стрічку. */
 .eobj {
-  container-type: inline-size;
-
-  --cols: minmax(0, 2.2fr) 160px 150px;
-
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  align-items: start;
   gap: 12px;
 }
 
-.group {
-  display: grid;
-  gap: 10px;
-  padding: 18px 20px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--paper-raised);
-}
-
-.group__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-}
-
-.group__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.group__link {
-  color: inherit;
-  text-decoration: none;
-}
-
-.group__link:hover {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.tag {
-  padding: 2px 9px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--ink-faint);
-}
-
-.tag--on {
-  border-color: rgb(56 176 0 / 40%);
-  color: var(--brand-strong);
-}
-
-.group__meta {
-  font-size: 12.5px;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-.group__meta strong {
-  color: var(--ink);
-}
-
-.cols {
-  display: grid;
-  grid-template-columns: var(--cols);
-  gap: 16px;
-  padding: 0 2px 8px;
-  border-bottom: 1px solid var(--line);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--ink-faint);
-}
-
-.cols__num {
-  text-align: right;
-}
-
-.rows {
-  display: grid;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: var(--cols);
-  align-items: center;
-  gap: 16px;
-  padding: 10px 2px;
-}
-
-.row + .row {
-  border-top: 1px solid var(--line);
-}
-
-.cell {
-  min-width: 0;
-}
-
-.cell--name {
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  overflow-wrap: anywhere;
-}
-
-.cell--num {
-  text-align: right;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.unit {
-  font-weight: 500;
-  color: var(--ink-faint);
-}
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  background: var(--paper-sunk);
-  font-size: 11.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--ink-muted);
-}
-
-.chip__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-}
-
-.chip--in_progress .chip__dot {
-  background: var(--amber);
-}
-
-.chip--done .chip__dot {
-  background: var(--brand);
-}
-
 .empty {
+  grid-column: 1 / -1;
   padding: 24px;
   border: 1px dashed var(--line-strong);
   border-radius: var(--r-lg);
@@ -240,35 +117,220 @@ const groups = computed(() => groupByObject(props.charges))
   color: var(--ink-muted);
 }
 
-@container (width < 640px) {
-  .cols {
-    display: none;
-  }
+.site {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--paper-raised);
+  transition:
+    border-color 0.18s var(--ease),
+    box-shadow 0.22s var(--ease);
+}
 
-  .row {
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 8px 14px;
-    padding: 12px 2px;
-  }
+.site:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-sm);
+}
 
-  .cell--name {
-    grid-column: 1 / -1;
-  }
+/* Архівний обʼєкт — історія: він не має важити стільки ж, скільки живий. */
+.site--off {
+  background: transparent;
+}
 
-  .cell--num {
-    text-align: left;
-  }
+.site__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px 14px;
+}
 
-  .cell:not(.cell--name)::before {
-    content: attr(data-label);
-    display: block;
-    margin-bottom: 2px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-  }
+.site__intro {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.site__title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.site__link {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Клікабельна вся картка, але посилання лишається одне — на назві. */
+.site__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.site__link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.site__where {
+  font-size: 12.5px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site__marks {
+  flex: none;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+/* ── Роботи ────────────────────────────────────────────────────── */
+
+.works {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * Рядок роботи: крапка стадії, назва, обсяг людини з загального. Під ними —
+ * підпис стадії, частка й смуга на всю ширину рядка.
+ */
+.work {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'dot name vol'
+    'dot state share'
+    'bar bar  bar';
+  align-items: center;
+  gap: 2px 10px;
+  padding: 9px 0;
+}
+
+.work + .work {
+  border-top: 1px solid var(--line);
+}
+
+.work__dot {
+  grid-area: dot;
+  align-self: start;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.work__dot--in_progress {
+  background: var(--amber);
+}
+
+.work__dot--done {
+  background: var(--brand);
+}
+
+.work__name {
+  grid-area: name;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.work__vol {
+  grid-area: vol;
+  text-align: right;
+  font-size: 13.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* «з 120 м³» — загальний обсяг роботи: він тихіший за обсяг людини. */
+.work__of {
+  font-weight: 500;
+  color: var(--ink-faint);
+}
+
+.work__state {
+  grid-area: state;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+
+.work__share {
+  grid-area: share;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  grid-area: bar;
+  overflow: hidden;
+  height: 3px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--paper-sunk);
+}
+
+.bar__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ink-faint);
+  transition: width 0.3s var(--ease);
+}
+
+.bar__fill--in_progress {
+  background: var(--amber);
+}
+
+.bar__fill--done {
+  background: var(--brand);
+}
+
+/* ── Підсумок картки ───────────────────────────────────────────── */
+
+.site__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.site__sum strong {
+  font-size: 13px;
+  color: var(--ink);
 }
 </style>

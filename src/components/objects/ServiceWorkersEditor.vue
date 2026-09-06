@@ -10,6 +10,7 @@ import {
   type ServiceWorkerErrors,
   type ServiceWorkerForm,
 } from '@/lib/services'
+import { useEmployeesStore } from '@/stores/employees'
 
 /**
  * Призначення виконавців: хто, скільки роботи взяв і за якою ставкою. Саме
@@ -29,6 +30,8 @@ const props = defineProps<{
 }>()
 
 const workers = defineModel<ServiceWorkerForm[]>({ required: true })
+
+const team = useEmployeesStore()
 
 const assigned = computed(() =>
   workers.value.reduce((sum, worker) => sum + (parseAmount(worker.volume) ?? 0), 0),
@@ -52,6 +55,14 @@ function workerErrors(id: string): ServiceWorkerErrors | undefined {
 
 function add(): void {
   workers.value = [...workers.value, emptyServiceWorker()]
+}
+
+/**
+ * Людини ще немає в довіднику — заводимо її з одного імені й одразу ставимо в
+ * цей рядок: кидати заповнену роботу заради довідника ніхто не має.
+ */
+function create(worker: ServiceWorkerForm, name: string): void {
+  worker.employeeId = team.addEmployee(name).id
 }
 
 function remove(id: string): void {
@@ -81,6 +92,7 @@ function remove(id: string): void {
               :loading="loading"
               :taken="taken"
               :invalid="Boolean(workerErrors(worker.id)?.employeeId)"
+              @create="create(worker, $event)"
             />
             <p v-if="workerErrors(worker.id)?.employeeId" class="cell__bad">
               {{ workerErrors(worker.id)?.employeeId }}
