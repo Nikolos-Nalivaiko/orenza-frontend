@@ -109,6 +109,11 @@ export function formatObjects(count: number): string {
   return formatUnits(count, 'обʼєкт', 'обʼєкти', 'обʼєктів')
 }
 
+/** «1 активний», «2 активні», «5 активних» — підпис до кількості обʼєктів. */
+export function formatActive(count: number): string {
+  return formatUnits(count, 'активний', 'активні', 'активних')
+}
+
 /* ── Платежі замовника ─────────────────────────────────────────── */
 
 /**

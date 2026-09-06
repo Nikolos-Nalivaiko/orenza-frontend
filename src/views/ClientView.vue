@@ -76,8 +76,8 @@ function setNotes(notes: string): void {
       <span class="missing__icon" aria-hidden="true"><AppIcon name="alert" /></span>
       <h1 class="display missing__title">Такого замовника немає</h1>
       <p class="missing__text">Можливо, його видалили або він належить іншому робочому простору.</p>
-      <RouterLink class="btn btn--ghost btn--sm" :to="{ name: 'objects' }">
-        До списку обʼєктів
+      <RouterLink class="btn btn--ghost btn--sm" :to="{ name: 'clients' }">
+        До списку замовників
       </RouterLink>
     </section>
 

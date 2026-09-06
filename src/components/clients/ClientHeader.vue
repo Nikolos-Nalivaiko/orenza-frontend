@@ -97,9 +97,9 @@ function saveDiscount(): void {
 <template>
   <header class="chead">
     <p class="eyebrow chead__crumbs">
-      <RouterLink class="chead__crumb" :to="{ name: 'objects' }">Обʼєкти</RouterLink>
+      <RouterLink class="chead__crumb" :to="{ name: 'clients' }">Замовники</RouterLink>
       <span aria-hidden="true">/</span>
-      Замовник
+      Картка
     </p>
 
     <!-- Одна карта: імʼя, умови й контакти читаються як одне ціле. -->

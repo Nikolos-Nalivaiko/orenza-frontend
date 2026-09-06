@@ -773,17 +773,18 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /** Замовника можна завести прямо з форми обʼєкта — щоб не кидати введене. */
-  function addClient(name: string): Client {
+  /**
+   * Замовника заводять двома шляхами: повною формою з довідника й одним іменем
+   * прямо з форми обʼєкта. Запис виходить той самий — різниться лише те,
+   * скільки про людину відомо на момент створення.
+   */
+  function createClient(form: ClientForm): Client {
     const client: Client = {
+      // TODO: POST /api/v1/workspaces/{id}/clients — id віддасть бекенд.
       id: Math.max(100, ...clients.value.map((item) => item.id)) + 1,
-      name: name.trim(),
-      contact: 'Створено з картки обʼєкта',
-      phone: '',
-      email: '',
-      address: '',
+      ...buildClientPayload(form),
       notes: '',
-      // Персональну знижку заводять у картці замовника, не з форми обʼєкта.
+      // Персональну знижку ставлять у картці: спершу людина, потім умови.
       discount: 0,
     }
 
@@ -791,6 +792,17 @@ export const useObjectsStore = defineStore('objects', () => {
     persistClients()
 
     return client
+  }
+
+  /** Замовника можна завести прямо з форми обʼєкта — щоб не кидати введене. */
+  function addClient(name: string): Client {
+    return createClient({
+      name,
+      contact: 'Створено з картки обʼєкта',
+      phone: '',
+      email: '',
+      address: '',
+    })
   }
 
   /* ── Картка замовника ────────────────────────────────────────── */
@@ -1024,6 +1036,7 @@ export const useObjectsStore = defineStore('objects', () => {
     removePhoto,
     findClient,
     fetchClients,
+    createClient,
     addClient,
     updateClient,
     setClientNotes,

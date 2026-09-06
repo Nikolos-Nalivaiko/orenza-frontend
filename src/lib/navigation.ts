@@ -38,6 +38,7 @@ export const NAV: NavGroup[] = [
   {
     title: 'Люди та гроші',
     items: [
+      { name: 'clients', label: 'Замовники', icon: 'user' },
       { name: 'team', label: 'Команда', icon: 'team', soon: true },
       { name: 'finance', label: 'Фінанси', icon: 'wallet', soon: true },
       { name: 'documents', label: 'Документи', icon: 'document', soon: true },

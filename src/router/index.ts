@@ -10,7 +10,7 @@ import LoginView from '@/views/LoginView.vue'
  * справжні маршрути: адреса, заголовок і активний пункт меню працюють.
  */
 /** Розділи з власним екраном — заглушка їх не стосується. */
-const READY = ['dashboard', 'objects']
+const READY = ['dashboard', 'objects', 'clients']
 
 const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
   .filter((item) => !READY.includes(item.name))
@@ -76,15 +76,18 @@ const router = createRouter({
           component: () => import('@/views/ObjectView.vue'),
           meta: { title: 'Картка обʼєкта', section: 'objects' },
         },
-        /**
-         * Картка замовника. Свого розділу в меню замовники ще не мають —
-         * заходять у них з обʼєкта, тож активним лишається пункт «Обʼєкти».
-         */
+        {
+          path: 'clients',
+          name: 'clients',
+          component: () => import('@/views/ClientsView.vue'),
+          meta: { title: 'Замовники', subtitle: 'Довідник замовників простору' },
+        },
+        /** Картка замовника — вкладений екран розділу «Замовники». */
         {
           path: 'clients/:id(\\d+)',
           name: 'client',
           component: () => import('@/views/ClientView.vue'),
-          meta: { title: 'Картка замовника', section: 'objects' },
+          meta: { title: 'Картка замовника', section: 'clients' },
         },
         {
           path: 'objects/new',
