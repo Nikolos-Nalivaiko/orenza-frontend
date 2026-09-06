@@ -10,7 +10,7 @@ import LoginView from '@/views/LoginView.vue'
  * справжні маршрути: адреса, заголовок і активний пункт меню працюють.
  */
 /** Розділи з власним екраном — заглушка їх не стосується. */
-const READY = ['dashboard', 'objects', 'clients', 'team']
+const READY = ['dashboard', 'objects', 'clients', 'team', 'schedule']
 
 const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
   .filter((item) => !READY.includes(item.name))
@@ -75,6 +75,15 @@ const router = createRouter({
           name: 'object',
           component: () => import('@/views/ObjectView.vue'),
           meta: { title: 'Картка обʼєкта', section: 'objects' },
+        },
+        {
+          path: 'schedule',
+          name: 'schedule',
+          component: () => import('@/views/ScheduleView.vue'),
+          meta: {
+            title: 'Графік робіт',
+            subtitle: 'Найближчі дати обʼєктів і очікувані платежі',
+          },
         },
         {
           path: 'clients',
