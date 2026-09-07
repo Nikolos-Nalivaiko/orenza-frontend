@@ -5,6 +5,7 @@ import { formatMomentDay } from '@/lib/activity'
 import { formatAmount } from '@/lib/amount'
 import { formatActive } from '@/lib/clients'
 import type { ClientRow } from '@/lib/clientList'
+import { formatPhone } from '@/lib/phone'
 
 /**
  * Замовники таблицею. Картки тут були б хизуванням: у замовника немає ні
@@ -48,7 +49,7 @@ defineProps<{ rows: ClientRow[]; today: string }>()
 
         <div class="cell" data-label="Телефон">
           <a v-if="client.phone" class="crow__phone" :href="`tel:${client.phone}`">
-            {{ client.phone }}
+            {{ formatPhone(client.phone) }}
           </a>
           <p v-else class="crow__none">—</p>
         </div>

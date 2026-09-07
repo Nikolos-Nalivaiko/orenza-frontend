@@ -3,6 +3,7 @@ import { computed, nextTick, reactive, ref, useTemplateRef } from 'vue'
 import { RouterLink } from 'vue-router'
 import ClientContacts from '@/components/clients/ClientContacts.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import PhoneField from '@/components/ui/PhoneField.vue'
 import TextField from '@/components/ui/TextField.vue'
 import { formatAmount } from '@/lib/amount'
 import {
@@ -234,17 +235,7 @@ function saveDiscount(): void {
             placeholder="З ким саме розмовляємо"
             :error="errors.contact"
           />
-          <TextField
-            v-model="form.phone"
-            label="Телефон"
-            optional
-            inputmode="tel"
-            autocomplete="tel"
-            placeholder="+380 67 000 00 00"
-            :error="errors.phone"
-          >
-            <template #prefix><AppIcon name="phone" /></template>
-          </TextField>
+          <PhoneField v-model="form.phone" optional :error="errors.phone" />
           <TextField
             v-model="form.email"
             label="Пошта"

@@ -4,6 +4,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import { useDismissable } from '@/composables/useDismissable'
 import type { Client } from '@/lib/objects'
 import { monogram } from '@/lib/workspaces'
+import { formatPhone } from '@/lib/phone'
 
 const props = defineProps<{
   clients: Client[]
@@ -164,7 +165,7 @@ function onKeydown(event: KeyboardEvent): void {
         </div>
         <div v-if="selected.phone">
           <dt>Телефон</dt>
-          <dd class="picked__phone">{{ selected.phone }}</dd>
+          <dd class="picked__phone">{{ formatPhone(selected.phone) }}</dd>
         </div>
       </dl>
     </div>

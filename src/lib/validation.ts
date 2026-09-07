@@ -27,6 +27,10 @@ export const PASSWORD_MIN = 8
 /** Довжина, з якої пароль пройде і продакшн-правило Password::min(10). */
 export const PASSWORD_STRONG = 10
 
+import { isBlankPhone, isCompletePhone, PHONE_LOCAL_DIGITS } from '@/lib/phone'
+
+export const PHONE_ERROR = `Потрібно ${PHONE_LOCAL_DIGITS} цифр після коду: 67 123 45 67`
+
 /**
  * Той самий алгоритм, що й UserData::normalisePhone: лишаємо цифри,
  * а «+» — тільки на першій позиції.
@@ -112,11 +116,8 @@ export function validateRegisterStep(step: number, form: RegisterForm): Errors<R
       errors.email = 'Схоже на помилку в адресі'
     }
 
-    const phone = toInternationalPhone(form.phone)
-
-    // +380 плюс дев'ять цифр національного номера.
-    if (phone !== '' && phone.length !== 13) {
-      errors.phone = 'Потрібно 9 цифр після коду: 067 123 45 67'
+    if (!isBlankPhone(form.phone) && !isCompletePhone(form.phone)) {
+      errors.phone = PHONE_ERROR
     }
   }
 

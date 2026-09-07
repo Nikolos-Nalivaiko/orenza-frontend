@@ -9,7 +9,8 @@
  * доступи свідомо відкладені — вони живуть не в довіднику людей.
  */
 
-import { isEmail } from '@/lib/validation'
+import { isBlankPhone, isCompletePhone } from '@/lib/phone'
+import { isEmail, PHONE_ERROR } from '@/lib/validation'
 
 /**
  * Людина не звільняється зі сховища: пішла — стає неактивною. Історія робіт і
@@ -130,6 +131,10 @@ export function validateEmployeeForm(form: EmployeeForm): EmployeeErrors {
 
   if (form.crew.trim().length > EMPLOYEE_ROLE_MAX) {
     errors.crew = `Максимум ${EMPLOYEE_ROLE_MAX} символів`
+  }
+
+  if (!isBlankPhone(form.phone) && !isCompletePhone(form.phone)) {
+    errors.phone = PHONE_ERROR
   }
 
   if (form.email.trim() !== '' && !isEmail(form.email)) {

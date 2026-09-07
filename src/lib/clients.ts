@@ -14,7 +14,8 @@
 import { parseAmount } from '@/lib/amount'
 import { comparePayments, objectFinance, type Payment } from '@/lib/finance'
 import { daysBetween, type Client, type ClientType, type ConstructionObject } from '@/lib/objects'
-import { isEmail } from '@/lib/validation'
+import { isBlankPhone, isCompletePhone } from '@/lib/phone'
+import { isEmail, PHONE_ERROR } from '@/lib/validation'
 
 /* ── Обʼєкти замовника ─────────────────────────────────────────── */
 
@@ -322,6 +323,10 @@ export function validateClientForm(form: ClientForm): ClientErrors {
     errors.name = `Мінімум ${CLIENT_NAME_MIN} символи`
   } else if (name.length > CLIENT_NAME_MAX) {
     errors.name = `Максимум ${CLIENT_NAME_MAX} символів`
+  }
+
+  if (!isBlankPhone(form.phone) && !isCompletePhone(form.phone)) {
+    errors.phone = PHONE_ERROR
   }
 
   if (form.email.trim() !== '' && !isEmail(form.email)) {

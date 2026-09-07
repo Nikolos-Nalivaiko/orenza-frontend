@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import type { IconName } from '@/components/ui/icons'
 import type { Client } from '@/lib/objects'
+import { formatPhone } from '@/lib/phone'
 
 const props = defineProps<{ client: Client }>()
 
@@ -23,7 +24,7 @@ const contacts = computed<Contact[]>(() => [
     key: 'phone',
     icon: 'phone',
     label: 'Телефон',
-    value: props.client.phone,
+    value: formatPhone(props.client.phone),
     href: props.client.phone === '' ? null : `tel:${props.client.phone}`,
     external: false,
     blank: 'Номера ще немає',

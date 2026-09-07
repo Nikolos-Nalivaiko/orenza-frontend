@@ -5,6 +5,7 @@ import AuthLayout from '@/layouts/AuthLayout.vue'
 import StepRail from '@/components/auth/StepRail.vue'
 import CheckBox from '@/components/ui/CheckBox.vue'
 import PasswordField from '@/components/ui/PasswordField.vue'
+import PhoneField from '@/components/ui/PhoneField.vue'
 import PasswordMeter from '@/components/ui/PasswordMeter.vue'
 import TextField from '@/components/ui/TextField.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -169,18 +170,7 @@ async function next(): Promise<void> {
                 :error="errors.email"
               />
 
-              <TextField
-                v-model="form.phone"
-                label="Телефон"
-                type="tel"
-                inputmode="tel"
-                autocomplete="tel"
-                placeholder="067 123 45 67"
-                optional
-                :error="errors.phone"
-              >
-                <template #prefix>+380</template>
-              </TextField>
+              <PhoneField v-model="form.phone" optional :error="errors.phone" />
             </template>
 
             <template v-else>

@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import PhoneField from '@/components/ui/PhoneField.vue'
 import TextField from '@/components/ui/TextField.vue'
 import { formatAmount } from '@/lib/amount'
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/lib/employees'
 import { payrollMonthLabel, type PayrollTotals } from '@/lib/payroll'
 import { monogram } from '@/lib/workspaces'
+import { formatPhone } from '@/lib/phone'
 
 /**
  * Шапка співробітника — хто це, як його набрати й на яких умовах він у нас
@@ -132,17 +134,7 @@ function save(): void {
             placeholder="Бригада №1 або підряд"
             :error="errors.crew"
           />
-          <TextField
-            v-model="form.phone"
-            label="Телефон"
-            optional
-            inputmode="tel"
-            autocomplete="tel"
-            placeholder="+380 67 000 00 00"
-            :error="errors.phone"
-          >
-            <template #prefix><AppIcon name="phone" /></template>
-          </TextField>
+          <PhoneField v-model="form.phone" optional :error="errors.phone" />
           <TextField
             v-model="form.email"
             label="Пошта"
@@ -176,7 +168,7 @@ function save(): void {
               class="col__value col__value--num"
               :href="`tel:${employee.phone}`"
             >
-              {{ employee.phone }}
+              {{ formatPhone(employee.phone) }}
             </a>
             <button v-else type="button" class="col__add" @click="startEdit">
               Номера ще немає

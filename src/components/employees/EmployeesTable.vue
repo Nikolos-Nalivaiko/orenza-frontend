@@ -4,6 +4,7 @@ import { formatAmount } from '@/lib/amount'
 import { EMPLOYEE_STATUS_LABELS } from '@/lib/employees'
 import type { EmployeeRow } from '@/lib/employeeList'
 import { payrollMonthLabel } from '@/lib/payroll'
+import { formatPhone } from '@/lib/phone'
 
 /**
  * Команда таблицею. У співробітника, як і в замовника, немає ні обкладинки,
@@ -47,7 +48,7 @@ defineProps<{ rows: EmployeeRow[]; today: string }>()
 
         <div class="cell" data-label="Телефон">
           <a v-if="employee.phone" class="erow__phone" :href="`tel:${employee.phone}`">
-            {{ employee.phone }}
+            {{ formatPhone(employee.phone) }}
           </a>
           <p v-else class="erow__none">—</p>
         </div>

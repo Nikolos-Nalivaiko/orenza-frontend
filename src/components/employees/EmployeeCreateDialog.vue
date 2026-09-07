@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, reactive, ref, useId } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import PhoneField from '@/components/ui/PhoneField.vue'
 import TextField from '@/components/ui/TextField.vue'
 import {
   hasEmployeeErrors,
@@ -103,17 +104,7 @@ onBeforeUnmount(() => {
           :error="errors.crew"
         />
 
-        <TextField
-          v-model="form.phone"
-          label="Телефон"
-          optional
-          inputmode="tel"
-          autocomplete="tel"
-          placeholder="+380 67 000 00 00"
-          :error="errors.phone"
-        >
-          <template #prefix><AppIcon name="phone" /></template>
-        </TextField>
+        <PhoneField v-model="form.phone" optional :error="errors.phone" />
 
         <TextField
           v-model="form.email"
