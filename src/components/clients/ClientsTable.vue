@@ -44,18 +44,20 @@ defineProps<{ rows: ClientRow[]; today: string }>()
             </span>
           </p>
 
-          <p class="crow__contact">{{ client.contact || 'контактну особу не вказано' }}</p>
+          <p v-if="client.type.value === 'company'" class="crow__contact">
+            {{ client.contact || 'контактну особу не вказано' }}
+          </p>
         </div>
 
         <div class="cell" data-label="Телефон">
           <a v-if="client.phone" class="crow__phone" :href="`tel:${client.phone}`">
             {{ formatPhone(client.phone) }}
           </a>
-          <p v-else class="crow__none">—</p>
+          <p v-else class="crow__value crow__value--none">—</p>
         </div>
 
         <div class="cell" data-label="Обʼєкти">
-          <p class="crow__num">{{ totals.objects }}</p>
+          <p class="crow__value">{{ totals.objects }}</p>
           <p class="crow__sub">
             <template v-if="totals.active > 0">{{ formatActive(totals.active) }}</template>
             <template v-else-if="totals.objects > 0">без активних</template>
@@ -66,7 +68,7 @@ defineProps<{ rows: ClientRow[]; today: string }>()
         <!-- Головна цифра списку: одразу видно, з ким вирішувати питання оплати. -->
         <div class="cell cell--num" data-label="До сплати">
           <p
-            class="crow__money"
+            class="crow__value crow__value--money"
             :class="{ 'is-late': totals.overdue > 0, 'is-clear': totals.due < 0.01 }"
           >
             <template v-if="totals.due < -0.01"> +{{ formatAmount(-totals.due) }} </template>
@@ -83,21 +85,19 @@ defineProps<{ rows: ClientRow[]; today: string }>()
             <template v-else-if="totals.pending > 0">
               чекаємо {{ formatAmount(totals.pending) }} ₴
             </template>
-            <template v-else>—</template>
           </p>
         </div>
 
         <div class="cell cell--num" data-label="Знижка">
-          <p v-if="client.discount > 0" class="crow__num">−{{ client.discount }}%</p>
-          <p v-else class="crow__none">—</p>
+          <p v-if="client.discount > 0" class="crow__value">−{{ client.discount }}%</p>
+          <p v-else class="crow__value crow__value--none">—</p>
         </div>
 
         <div class="cell" data-label="Активність">
-          <template v-if="last">
-            <p class="crow__num">{{ formatMomentDay(last.at, today) }}</p>
-            <p class="crow__sub">{{ last.text }}</p>
-          </template>
-          <p v-else class="crow__none">руху ще не було</p>
+          <p class="crow__value" :class="{ 'crow__value--none': last === null }">
+            {{ last ? formatMomentDay(last.at, today) : '—' }}
+          </p>
+          <p class="crow__sub">{{ last ? last.text : 'руху ще не було' }}</p>
         </div>
       </li>
     </ul>
@@ -109,7 +109,11 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   /* Ширина таблиці залежить від колонки: бічну панель можна згорнути. */
   container-type: inline-size;
 
-  --cols: minmax(176px, 2.4fr) minmax(128px, 1.2fr) 108px 160px 96px 140px;
+  --cols: minmax(180px, 2.4fr) 152px 96px 152px 88px minmax(150px, 1.5fr);
+
+  /* Один рядок значення на всі колонки: інакше перші рядки клітинок стоять
+     на різній висоті через різні кеглі. */
+  --row-line: 20px;
 
   /*
    * Проміжок між колонками широкий саме через праву половину таблиці: сума,
@@ -152,9 +156,9 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   position: relative;
   display: grid;
   grid-template-columns: var(--cols);
-  align-items: center;
+  align-items: stretch;
   gap: var(--col-gap);
-  padding: 12px 14px;
+  padding: 11px 14px 12px;
   border: 1px solid transparent;
   border-radius: var(--r-md);
   transition:
@@ -167,9 +171,14 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   background: var(--paper-raised);
 }
 
+/*
+ * Клітинка з одним рядком стоїть по центру рядка, з двома — заповнює його
+ * повністю. Так імʼя без контактної особи не висить угорі.
+ */
 .cell {
   display: grid;
-  gap: 3px;
+  align-content: center;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -183,11 +192,13 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   align-items: center;
   gap: 8px;
   min-width: 0;
+  height: var(--row-line);
 }
 
 .crow__link {
   font-size: 14px;
   font-weight: 600;
+  line-height: var(--row-line);
   letter-spacing: -0.01em;
   text-decoration: none;
   overflow: hidden;
@@ -231,6 +242,7 @@ defineProps<{ rows: ClientRow[]; today: string }>()
 
 .crow__contact {
   font-size: 12.5px;
+  line-height: 16px;
   color: var(--ink-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -244,6 +256,7 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   justify-self: start;
   font-size: 13px;
   font-weight: 600;
+  line-height: var(--row-line);
   color: var(--ink);
   text-decoration: none;
   white-space: nowrap;
@@ -255,23 +268,27 @@ defineProps<{ rows: ClientRow[]; today: string }>()
   text-underline-offset: 3px;
 }
 
-.crow__num {
+.crow__value {
   font-size: 13px;
   font-weight: 600;
+  line-height: var(--row-line);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 
-.crow__money {
+.crow__value--money {
   font-size: 14px;
-  font-weight: 600;
   letter-spacing: -0.015em;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+}
+
+/* Порожня клітинка тримає той самий рядок, що й заповнена. */
+.crow__value--none {
+  font-weight: 500;
+  color: var(--ink-faint);
 }
 
 /* Нуль боргу — не подія: він не має важити стільки ж, скільки сума. */
-.crow__money.is-clear {
+.crow__value.is-clear {
   font-weight: 500;
   color: var(--ink-faint);
 }
@@ -283,15 +300,11 @@ defineProps<{ rows: ClientRow[]; today: string }>()
 
 .crow__sub {
   font-size: 11.5px;
+  line-height: 16px;
   color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.crow__none {
-  font-size: 12.5px;
-  color: var(--ink-faint);
 }
 
 .is-late {
@@ -315,6 +328,10 @@ defineProps<{ rows: ClientRow[]; today: string }>()
     gap: 14px;
     border-color: var(--line);
     background: var(--paper-raised);
+  }
+
+  .cell {
+    align-content: start;
   }
 
   .cell--name {

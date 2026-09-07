@@ -131,12 +131,11 @@ function saveDiscount(): void {
             </span>
           </h1>
 
-          <p class="hero__contact">
-            <AppIcon :name="isCompany ? 'building' : 'user'" />
-            <template v-if="isCompany">
-              {{ client.contact || 'контактну особу не вказано' }}
-            </template>
-            <template v-else>{{ CLIENT_TYPE_LABELS[client.type.value] }}</template>
+          <p v-if="isCompany" class="hero__contact">
+            <AppIcon name="user" />
+            <span class="hero__contact-cap">Контактна особа</span>
+            <span v-if="client.contact" class="hero__contact-name">{{ client.contact }}</span>
+            <span v-else class="hero__contact-none">не вказано</span>
           </p>
         </div>
 
@@ -177,23 +176,26 @@ function saveDiscount(): void {
           </div>
 
           <button
-            v-else
+            v-else-if="client.discount > 0"
             type="button"
             class="rate"
-            :class="{ 'rate--off': client.discount === 0 }"
-            :title="
-              client.discount === 0
-                ? 'Персональної знижки немає'
-                : 'Знижка підставляється в нові обʼєкти замовника'
-            "
+            title="Знижка підставляється в нові обʼєкти замовника"
             @click="startDiscount"
           >
             <span class="rate__cap">Знижка</span>
-            <span class="rate__value">
-              <template v-if="client.discount > 0">−{{ client.discount }}%</template>
-              <template v-else>немає</template>
-            </span>
+            <span class="rate__value">−{{ client.discount }}%</span>
             <AppIcon name="edit" />
+          </button>
+
+          <button
+            v-else
+            type="button"
+            class="rate rate--add"
+            title="Знижка підставлятиметься в нові обʼєкти замовника"
+            @click="startDiscount"
+          >
+            <AppIcon name="plus" />
+            <span>Додати знижку</span>
           </button>
 
           <button v-if="!editing" type="button" class="tool" @click="startEdit">
@@ -446,9 +448,28 @@ function saveDiscount(): void {
 .hero__contact {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13.5px;
   color: var(--ink-muted);
+}
+
+.hero__contact-cap {
+  padding-right: 8px;
+  border-right: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.hero__contact-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.hero__contact-none {
+  color: var(--ink-faint);
 }
 
 .hero__contact :deep(.icon) {
@@ -535,10 +556,26 @@ function saveDiscount(): void {
   color: var(--ink-faint);
 }
 
-/* Знижки немає — кнопка не має вдавати умову, якої не існує. */
-.rate--off .rate__value {
+.rate__value {
+  color: var(--brand-strong);
+}
+
+.rate--add {
+  border-style: dashed;
+  border-color: var(--line);
+  color: var(--ink-muted);
   font-weight: 500;
-  color: var(--ink-faint);
+}
+
+.rate--add:hover {
+  border-style: solid;
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.rate--add:hover :deep(.icon) {
+  color: var(--brand-strong);
 }
 
 .disc {
