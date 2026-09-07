@@ -21,11 +21,11 @@ const typeLabel = computed(() =>
   current.value === null ? '' : WORKSPACE_TYPE_LABELS[current.value.type.value],
 )
 
-function pick(id: number): void {
+async function pick(id: number): Promise<void> {
   open.value = false
 
   if (id !== workspaces.currentId) {
-    workspaces.select(id)
+    await workspaces.select(id)
   }
 }
 

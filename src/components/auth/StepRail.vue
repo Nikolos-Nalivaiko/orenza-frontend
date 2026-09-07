@@ -76,8 +76,8 @@ defineEmits<{ jump: [index: number] }>()
 .rail__dot {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
   background: var(--paper-raised);
@@ -96,7 +96,7 @@ defineEmits<{ jump: [index: number] }>()
 }
 
 .rail__label {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-faint);
   letter-spacing: -0.01em;
@@ -105,7 +105,7 @@ defineEmits<{ jump: [index: number] }>()
 
 .rail__track {
   display: block;
-  height: 3px;
+  height: 2px;
   border-radius: 999px;
   background: var(--paper-sunk);
   overflow: hidden;

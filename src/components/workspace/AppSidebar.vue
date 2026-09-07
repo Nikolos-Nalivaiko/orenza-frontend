@@ -7,6 +7,7 @@ import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher.vue'
 import { useDismissable } from '@/composables/useDismissable'
 import { NAV, NAV_FOOTER, type NavGroup, type NavItem } from '@/lib/navigation'
 import { useAuthStore } from '@/stores/auth'
+import { useWorkspacesStore } from '@/stores/workspaces'
 
 const props = defineProps<{ collapsed: boolean; overdue: number }>()
 const emit = defineEmits<{ toggle: []; navigate: [] }>()
@@ -15,10 +16,6 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
-/**
- * Вкладені екрани (наприклад, створення обʼєкта) мають власні адреси, тож
- * exact-active на них не спрацьовує — розділ вони називають самі, у meta.
- */
 const section = computed(() => (typeof route.meta.section === 'string' ? route.meta.section : null))
 
 const search = useTemplateRef<HTMLInputElement>('search')
@@ -36,15 +33,10 @@ const initials = computed(() => {
   return `${first}${last}`.toUpperCase() || 'O'
 })
 
-/** Прострочені задачі — єдиний лічильник, який має сенс тримати в меню. */
 function withBadge(item: NavItem): NavItem {
   return item.name === 'dashboard' && props.overdue > 0 ? { ...item, badge: props.overdue } : item
 }
 
-/**
- * Порожній запит лишає групи як є; щойно щось введено — меню перетворюється
- * на один плаский список збігів, бо заголовки груп у результатах лише заважають.
- */
 const groups = computed<NavGroup[]>(() => {
   const needle = query.value.trim().toLowerCase()
 
@@ -66,7 +58,6 @@ function focusSearch(): void {
     emit('toggle')
   }
 
-  // Панель ще розгортається — фокус даємо наступним кадром.
   requestAnimationFrame(() => search.value?.focus())
 }
 
@@ -92,7 +83,8 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeyDown))
 
 async function signOut(): Promise<void> {
   userOpen.value = false
-  auth.logout()
+  useWorkspacesStore().clear()
+  await auth.logout()
   await router.push({ name: 'login' })
 }
 

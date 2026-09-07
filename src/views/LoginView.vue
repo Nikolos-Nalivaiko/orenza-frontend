@@ -27,7 +27,7 @@ async function submit(): Promise<void> {
     return
   }
 
-  if (await auth.login(form)) {
+  if (await auth.login(form, remember.value)) {
     await router.push({ name: 'workspaces' })
   }
 }
@@ -42,7 +42,6 @@ async function submit(): Promise<void> {
 
     <section class="login">
       <header class="login__head">
-        <p class="eyebrow">Вхід до системи</p>
         <h1 class="display login__title">З поверненням<span class="dot">.</span></h1>
         <p class="muted login__sub">Обʼєкти, кошториси та бригади там, де ви їх залишили.</p>
       </header>
@@ -70,22 +69,21 @@ async function submit(): Promise<void> {
           inputmode="email"
           autocomplete="email"
           placeholder="ivan@budcompany.ua"
-          :error="errors.email"
+          :error="errors.email ?? auth.fieldErrors.email"
           autofocus
         />
 
-        <div class="login__password">
-          <PasswordField
-            v-model="form.password"
-            label="Пароль"
-            autocomplete="current-password"
-            :error="errors.password"
-          />
-          <a class="login__forgot" href="#" @click.prevent>Забули пароль?</a>
-        </div>
+        <PasswordField
+          v-model="form.password"
+          label="Пароль"
+          autocomplete="current-password"
+          :error="errors.password ?? auth.fieldErrors.password"
+        />
 
+        <!-- Обидві дрібні дії в одному рядку — раніше вони займали два. -->
         <div class="login__row">
           <CheckBox v-model="remember">Не виходити на цьому пристрої</CheckBox>
+          <a class="login__forgot" href="#" @click.prevent>Забули пароль?</a>
         </div>
 
         <button type="submit" class="btn btn--primary btn--block" :disabled="auth.isPending">
@@ -103,10 +101,6 @@ async function submit(): Promise<void> {
           </svg>
         </button>
       </form>
-
-      <p class="login__help">
-        Не маєте доступу? Попросіть адміністратора компанії надіслати запрошення.
-      </p>
     </section>
   </AuthLayout>
 </template>
@@ -140,16 +134,6 @@ async function submit(): Promise<void> {
   gap: 18px;
 }
 
-.login__password {
-  display: grid;
-  gap: 8px;
-  justify-items: end;
-}
-
-.login__password > :first-child {
-  width: 100%;
-}
-
 .login__forgot {
   font-size: 12.5px;
   font-weight: 600;
@@ -171,16 +155,7 @@ async function submit(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 4px 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  padding-block: 14px;
-}
-
-.login__help {
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: var(--ink-faint);
+  flex-wrap: wrap;
 }
 
 .alert {

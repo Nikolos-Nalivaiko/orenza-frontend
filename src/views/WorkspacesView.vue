@@ -79,17 +79,18 @@ async function submit(form: WorkspaceForm): Promise<void> {
   }
 
   creating.value = false
-  workspaces.select(created.id)
+  await workspaces.select(created.id)
   await router.push({ name: 'dashboard' })
 }
 
 async function open(id: number): Promise<void> {
-  workspaces.select(id)
+  await workspaces.select(id)
   await router.push({ name: 'dashboard' })
 }
 
 async function signOut(): Promise<void> {
-  auth.logout()
+  workspaces.clear()
+  await auth.logout()
   await router.push({ name: 'login' })
 }
 </script>
@@ -141,6 +142,11 @@ async function signOut(): Promise<void> {
           Створити простір
         </button>
       </div>
+
+      <p v-if="workspaces.error && !creating" class="failed" role="alert">
+        <span>{{ workspaces.error }}</span>
+        <button type="button" class="failed__retry" @click="workspaces.fetchAll()">Оновити</button>
+      </p>
 
       <div v-if="workspaces.isLoading || !workspaces.isEmpty" class="toolbar">
         <span class="toolbar__count">
@@ -319,6 +325,31 @@ async function signOut(): Promise<void> {
 .picker__plus {
   width: 16px;
   height: 16px;
+}
+
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failed__retry {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .toolbar {

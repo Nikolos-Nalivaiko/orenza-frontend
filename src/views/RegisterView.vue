@@ -15,6 +15,16 @@ const router = useRouter()
 
 const STEPS = ['Профіль', 'Контакти', 'Безпека']
 
+const STEP_OF: Partial<Record<keyof RegisterForm, number>> = {
+  firstName: 0,
+  lastName: 0,
+  email: 1,
+  phone: 1,
+  password: 2,
+  passwordConfirmation: 2,
+  agreed: 2,
+}
+
 const step = ref(0)
 const direction = ref<'fwd' | 'back'>('fwd')
 const errors = ref<Errors<RegisterForm>>({})
@@ -82,6 +92,25 @@ async function next(): Promise<void> {
 
   if (await auth.register(form)) {
     await router.push({ name: 'workspaces' })
+
+    return
+  }
+
+  const server = auth.fieldErrors
+
+  if (!hasErrors(server)) {
+    return
+  }
+
+  errors.value = { ...server }
+
+  const target = Math.min(
+    ...Object.keys(server).map((field) => STEP_OF[field as keyof RegisterForm] ?? step.value),
+  )
+
+  if (target < step.value) {
+    direction.value = 'back'
+    step.value = target
   }
 }
 </script>
@@ -126,29 +155,6 @@ async function next(): Promise<void> {
                   :error="errors.lastName"
                 />
               </div>
-
-              <ul class="reg__perks">
-                <li
-                  v-for="perk in [
-                    'Обʼєкти й етапи робіт',
-                    'Кошториси та акти',
-                    'Заявки на матеріали',
-                  ]"
-                  :key="perk"
-                >
-                  <svg viewBox="0 0 14 14" aria-hidden="true">
-                    <path
-                      d="M3 7.3l2.6 2.6L11 4.4"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                  {{ perk }}
-                </li>
-              </ul>
             </template>
 
             <template v-else-if="step === 1">
@@ -235,8 +241,6 @@ async function next(): Promise<void> {
           </button>
         </div>
       </form>
-
-      <p class="reg__foot">Крок {{ step + 1 }} з {{ STEPS.length }}</p>
     </section>
   </AuthLayout>
 </template>
@@ -277,30 +281,6 @@ async function next(): Promise<void> {
   gap: 12px;
 }
 
-.reg__perks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  margin: 0;
-  padding: 14px 0 0;
-  border-top: 1px solid var(--line);
-  list-style: none;
-  font-size: 12.5px;
-  color: var(--ink-muted);
-}
-
-.reg__perks li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.reg__perks svg {
-  width: 12px;
-  height: 12px;
-  color: var(--brand);
-}
-
 .reg__actions {
   display: flex;
   gap: 10px;
@@ -316,11 +296,6 @@ async function next(): Promise<void> {
 
 .btn:hover:not(:disabled) .btn__arrow--back {
   transform: translateX(-4px);
-}
-
-.reg__foot {
-  font-size: 12px;
-  color: var(--ink-faint);
 }
 
 .reg :deep(.check__text a) {

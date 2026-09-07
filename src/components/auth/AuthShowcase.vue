@@ -40,15 +40,6 @@ const sites: SiteCard[] = [
   },
 ]
 
-const feed = [
-  'Бетонування 3-го рівня завершено',
-  'Прийнято 24 т арматури',
-  'Акт КБ-2в підписано',
-  'Заявка на автокран узгоджена',
-  'Новий лід: ремонт офісу, 240 м²',
-  'Табель бригади №1 закрито',
-]
-
 const root = useTemplateRef<HTMLElement>('root')
 usePointerGlow(root)
 
@@ -84,20 +75,13 @@ const acts = useCountUp(37)
 
     <header class="showcase__head">
       <BrandMark tone="light" />
-      <span class="showcase__pill">
-        <span class="showcase__dot" aria-hidden="true" />
-        дані оновлено щойно
-      </span>
     </header>
 
     <div class="showcase__lead">
       <h2 class="display showcase__title">
         Обʼєкти, кошториси і бригади — <em>в одному вікні</em>
       </h2>
-      <p class="showcase__sub">
-        Orenza збирає забудову, підряд і закупівлі в один процес: від першого ліда до підписаного
-        акта виконаних робіт.
-      </p>
+      <p class="showcase__sub">Від першого ліда до підписаного акта виконаних робіт.</p>
     </div>
 
     <dl class="stats">
@@ -150,15 +134,6 @@ const acts = useCountUp(37)
         />
       </div>
     </div>
-
-    <div class="ticker" aria-hidden="true">
-      <div class="ticker__row">
-        <span v-for="item in [...feed, ...feed]" :key="item" class="ticker__item">
-          <span class="ticker__bullet" />
-          {{ item }}
-        </span>
-      </div>
-    </div>
   </aside>
 </template>
 
@@ -169,10 +144,11 @@ const acts = useCountUp(37)
 
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr auto auto auto;
-  gap: 30px;
+  /* Шапка, заголовок на всю вільну висоту, цифри, картка — і нічого більше. */
+  grid-template-rows: auto 1fr auto auto;
+  gap: 32px;
   overflow: hidden;
-  padding: 38px 40px 30px;
+  padding: 38px 40px 36px;
   border-radius: var(--r-xl);
   background: radial-gradient(120% 100% at 20% 0%, #16211a 0%, #0b100d 55%, #080b09 100%);
   color: #fff;
@@ -217,43 +193,6 @@ const acts = useCountUp(37)
   gap: 16px;
 }
 
-.showcase__pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 12px;
-  border: 1px solid rgb(255 255 255 / 14%);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgb(255 255 255 / 62%);
-}
-
-.showcase__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--brand);
-  box-shadow: 0 0 0 0 var(--brand-glow);
-  animation: pulse 2.4s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgb(56 176 0 / 55%);
-  }
-
-  70% {
-    box-shadow: 0 0 0 9px rgb(56 176 0 / 0%);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgb(56 176 0 / 0%);
-  }
-}
-
 .showcase__lead {
   align-self: end;
   display: grid;
@@ -285,9 +224,9 @@ const acts = useCountUp(37)
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
   margin: 0;
-  padding: 18px 0;
+  /* Одна лінійка згори: рамка з двох боків робила з цифр окрему плашку. */
+  padding: 22px 0 0;
   border-top: 1px solid rgb(255 255 255 / 10%);
-  border-bottom: 1px solid rgb(255 255 255 / 10%);
 }
 
 .stats__item {
@@ -445,48 +384,5 @@ const acts = useCountUp(37)
 .swap-leave-to {
   opacity: 0;
   transform: translateY(-8px);
-}
-
-/* Стрічка подій */
-.ticker {
-  overflow: hidden;
-  padding-top: 18px;
-  border-top: 1px solid rgb(255 255 255 / 10%);
-  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 88%, transparent);
-}
-
-.ticker__row {
-  display: flex;
-  gap: 26px;
-  width: max-content;
-  animation: marquee 34s linear infinite;
-}
-
-.ticker__item {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  white-space: nowrap;
-  color: rgb(255 255 255 / 45%);
-}
-
-.ticker__bullet {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--brand);
-}
-
-@keyframes marquee {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ticker__row {
-    animation: none;
-  }
 }
 </style>

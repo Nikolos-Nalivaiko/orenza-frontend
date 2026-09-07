@@ -1,24 +1,20 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { useAuthStore } from './auth'
+import { useAuthStore, type AuthUser } from './auth'
 import { useProgressStore } from './progress'
-import {
-  buildWorkspacePayload,
-  slugify,
-  WORKSPACE_TYPE_LABELS,
-  type Workspace,
-  type WorkspaceForm,
-} from '@/lib/workspaces'
+import { api, ApiError } from '@/lib/http'
+import { buildWorkspacePayload, type Workspace, type WorkspaceForm } from '@/lib/workspaces'
 
-/**
- * Поки в API є лише POST /api/v1/workspaces, список зберігаємо локально —
- * структура записів та правила створення ті самі, що й на бекенді.
- */
 const STORAGE_KEY = 'orenza.workspaces'
 
 interface StoredState {
   items: Workspace[]
   currentId: number | null
+}
+
+interface SwitchPayload {
+  workspace: Workspace
+  user: AuthUser
 }
 
 function read(): StoredState {
@@ -35,12 +31,12 @@ function write(state: StoredState): void {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   } catch {
-    // Приватний режим — список просто не переживе перезавантаження.
+    // ignore
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+function messageFor(cause: unknown, fallback: string): string {
+  return cause instanceof ApiError ? cause.message : fallback
 }
 
 export const useWorkspacesStore = defineStore('workspaces', () => {
@@ -49,22 +45,16 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   const restored = read()
 
   const items = ref<Workspace[]>(restored.items)
-  const currentId = ref<number | null>(restored.currentId)
+  const currentId = ref<number | null>(
+    auth.user?.current_workspace_id ?? restored.currentId ?? null,
+  )
 
-  /**
-   * Стартуємо саме в стані завантаження. Відновлений із localStorage список
-   * потрібен guard'у роутера синхронно, але показувати його як готовий не можна:
-   * інакше перший кадр екрана — картки чи «порожньо», і лише наступний тік
-   * замінює їх на скелетони. Виходить блимання та зайвий перехід заголовка.
-   */
   const isLoading = ref(true)
   const isSaving = ref(false)
   const error = ref<string | null>(null)
 
   const current = computed(() => items.value.find((item) => item.id === currentId.value) ?? null)
   const isEmpty = computed(() => items.value.length === 0)
-
-  /** Персональний простір може бути лише один — правило CreateWorkspaceAction. */
   const hasPersonal = computed(() => items.value.some((item) => item.type.value === 'personal'))
 
   function persist(): void {
@@ -75,89 +65,75 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     error.value = null
   }
 
-  /** Унікальний slug: base, base-2, base-3 — як у GenerateWorkspaceSlugAction. */
-  function uniqueSlug(base: string): string {
-    const taken = new Set(items.value.map((item) => item.slug))
-    const seed = base === '' ? 'workspace' : base
-
-    if (!taken.has(seed)) {
-      return seed
-    }
-
-    let suffix = 2
-
-    while (taken.has(`${seed}-${suffix}`)) {
-      suffix += 1
-    }
-
-    return `${seed}-${suffix}`
-  }
-
   async function fetchAll(): Promise<void> {
     isLoading.value = true
     error.value = null
 
     try {
-      // TODO: GET /api/v1/workspaces (ендпоінт ще не реалізовано на бекенді)
-      await progress.track(delay(550))
+      items.value = await progress.track(api.get<Workspace[]>('/workspaces'))
 
-      const stored = read()
+      const known = items.value.some((item) => item.id === currentId.value)
 
-      items.value = stored.items
-      currentId.value = stored.currentId
+      if (!known) {
+        currentId.value = items.value[0]?.id ?? null
+      }
+
+      persist()
+    } catch (cause) {
+      error.value = messageFor(cause, 'Не вдалося завантажити простори.')
     } finally {
-      // Навіть якщо запит впаде, екран не має лишитись у скелетонах назавжди.
       isLoading.value = false
     }
   }
 
   async function create(form: WorkspaceForm): Promise<Workspace | null> {
-    const payload = buildWorkspacePayload(form)
-
     isSaving.value = true
     error.value = null
 
-    // TODO: POST /api/v1/workspaces
-    await progress.track(delay(700))
-    isSaving.value = false
+    try {
+      const workspace = await progress.track(
+        api.post<Workspace>('/workspaces', buildWorkspacePayload(form)),
+      )
 
-    if (payload.type === 'personal' && hasPersonal.value) {
-      error.value = 'У вас уже є особистий простір.'
+      items.value = [...items.value, workspace]
+      persist()
 
-      return null
-    }
-
-    // Для особистого простору бекенд бере повне імʼя власника як назву.
-    const name = payload.name ?? auth.user?.full_name ?? ''
-
-    if (name === '') {
-      error.value = 'Простір компанії потребує назви.'
+      return workspace
+    } catch (cause) {
+      error.value = messageFor(cause, 'Не вдалося створити простір.')
 
       return null
+    } finally {
+      isSaving.value = false
     }
-
-    // Адресу генерує бекенд із назви — локально повторюємо ту саму логіку.
-    const slug = uniqueSlug(slugify(name))
-
-    const workspace: Workspace = {
-      id: Math.max(0, ...items.value.map((item) => item.id)) + 1,
-      type: { value: payload.type, label: WORKSPACE_TYPE_LABELS[payload.type] },
-      name,
-      slug,
-      owner_id: auth.user?.id ?? 0,
-      created_at: new Date().toISOString(),
-    }
-
-    items.value = [...items.value, workspace]
-    currentId.value ??= workspace.id
-    persist()
-
-    return workspace
   }
 
-  function select(id: number): void {
-    // TODO: перемикання current_workspace_id на бекенді
+  async function select(id: number): Promise<void> {
+    const workspace = items.value.find((item) => item.id === id)
+
+    if (workspace === undefined) {
+      return
+    }
+
+    const previous = currentId.value
+
     currentId.value = id
+    persist()
+
+    try {
+      const payload = await api.put<SwitchPayload>(`/workspaces/${workspace.slug}/current`)
+
+      auth.setUser(payload.user)
+    } catch (cause) {
+      currentId.value = previous
+      persist()
+      error.value = messageFor(cause, 'Не вдалося змінити простір.')
+    }
+  }
+
+  function clear(): void {
+    items.value = []
+    currentId.value = null
     persist()
   }
 
@@ -174,5 +150,6 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     fetchAll,
     create,
     select,
+    clear,
   }
 })
