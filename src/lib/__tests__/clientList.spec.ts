@@ -18,11 +18,11 @@ const TODAY = '2026-09-02'
 function makeClient(overrides: Partial<Client> = {}): Client {
   return {
     id: 1,
+    type: { value: 'company', label: 'Компанія' },
     name: 'ТОВ «Мегабуд»',
     contact: 'Ірина Ковальчук',
     phone: '+380 67 214 30 11',
     email: 'i.kovalchuk@megabud.ua',
-    address: 'вул. Антоновича, 44 · Київ',
     notes: '',
     discount: 5,
     ...overrides,

@@ -4,30 +4,16 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import type { IconName } from '@/components/ui/icons'
 import type { Client } from '@/lib/objects'
 
-/**
- * Звʼязок із замовником: телефон, пошта, адреса.
- *
- * Це не три картки, а одна смуга з трьох колонок — інакше шапка розсипається
- * на окремі коробочки, і погляд не має де зупинитись. Кожне значення саме по
- * собі дія: подзвонити, написати, знайти на мапі. Поруч — копіювання: номер
- * частіше переносять у месенджер, ніж набирають з екрана.
- *
- * Колонки різняться значком і підписом, а не кольором: три різнокольорові
- * плашки в шапці читались би як статуси, яких у контактів немає.
- */
-
 const props = defineProps<{ client: Client }>()
 
 const emit = defineEmits<{ fill: [] }>()
 
 interface Contact {
-  key: 'phone' | 'email' | 'address'
+  key: 'phone' | 'email'
   icon: IconName
   label: string
   value: string
-  /** Куди веде саме значення. Порожньо — вести нікуди. */
   href: string | null
-  /** Зовнішнє посилання відкриваємо в новій вкладці, tel: і mailto: — ні. */
   external: boolean
   blank: string
 }
@@ -50,19 +36,6 @@ const contacts = computed<Contact[]>(() => [
     href: props.client.email === '' ? null : `mailto:${props.client.email}`,
     external: false,
     blank: 'Пошти ще немає',
-  },
-  {
-    key: 'address',
-    icon: 'pin',
-    label: 'Адреса',
-    value: props.client.address,
-    // Адресу не набирають — за нею їдуть, тож вона веде на мапу.
-    href:
-      props.client.address === ''
-        ? null
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(props.client.address)}`,
-    external: true,
-    blank: 'Адреси ще немає',
   },
 ])
 

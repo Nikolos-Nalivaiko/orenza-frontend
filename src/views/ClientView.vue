@@ -54,16 +54,16 @@ onMounted(() => {
   }
 })
 
-function save(form: ClientForm): void {
-  objects.updateClient(id.value, form)
+async function save(form: ClientForm): Promise<void> {
+  await objects.updateClient(id.value, form)
 }
 
-function setDiscount(percent: number): void {
-  objects.setClientDiscount(id.value, percent)
+async function setDiscount(percent: number): Promise<void> {
+  await objects.setClientDiscount(id.value, percent)
 }
 
-function setNotes(notes: string): void {
-  objects.setClientNotes(id.value, notes)
+async function setNotes(notes: string): Promise<void> {
+  await objects.setClientNotes(id.value, notes)
 }
 </script>
 

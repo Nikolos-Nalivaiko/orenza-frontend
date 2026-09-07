@@ -57,14 +57,16 @@ export const OBJECT_STATUS_LABELS: Record<ObjectStatus, string> = {
 }
 
 /** Замовник обʼєкта. Окремого довідника ще немає — структура вже під нього. */
+export type ClientType = 'person' | 'company'
+
 export interface Client {
   id: number
+  type: { value: ClientType; label: string }
   name: string
   /** Контактна особа: з ким саме розмовляють, якщо замовник — компанія. */
   contact: string
   phone: string
   email: string
-  address: string
   /**
    * Як із цією людиною працювати: коли зручно телефонувати, на чому наполягає,
    * про що домовились назавжди. Це опис самого замовника, а не хроніка подій —
@@ -85,10 +87,10 @@ export interface Client {
 export function normalizeClient(client: Client): Client {
   return {
     ...client,
+    type: client.type ?? { value: 'person', label: 'Особа' },
     contact: client.contact ?? '',
     phone: client.phone ?? '',
     email: client.email ?? '',
-    address: client.address ?? '',
     notes: client.notes ?? '',
     discount: client.discount ?? 0,
   }
@@ -455,53 +457,53 @@ export function buildObjectPayload(form: ObjectForm): ObjectPayload {
 /** Довідника замовників ще немає — беремо тих, що вже фігурують у дашборді. */
 export const DEMO_CLIENTS: readonly Client[] = [
   {
-    id: 1,
+    id: 9001,
+    type: { value: 'company', label: 'Компанія' },
     name: 'ТОВ «Мегабуд»',
     contact: 'Ірина Ковальчук',
     phone: '+380 67 214 30 11',
     email: 'i.kovalchuk@megabud.ua',
-    address: 'вул. Антоновича, 44 · Київ',
     notes:
       'Погодження тільки через Ірину. Акти приймають до 25 числа, пізніше — уже наступний місяць.',
     discount: 5,
   },
   {
-    id: 2,
+    id: 9002,
+    type: { value: 'company', label: 'Компанія' },
     name: 'ОСББ «Стеценка, 12»',
     contact: 'Олег Дяченко',
     phone: '+380 50 118 44 02',
     email: 'osbb.stetsenka@gmail.com',
-    address: 'вул. Стеценка, 12 · Київ',
     notes: '',
     discount: 0,
   },
   {
-    id: 3,
+    id: 9003,
+    type: { value: 'company', label: 'Компанія' },
     name: 'ФОП Романюк О. П.',
     contact: 'Олександр Романюк',
     phone: '+380 63 902 77 15',
     email: 'romaniuk.op@ukr.net',
-    address: 'с. Гатне · Київська обл.',
     notes: 'Телефонувати після 18:00 — удень на обʼєкті. Любить фото з майданчика щотижня.',
     discount: 3,
   },
   {
-    id: 4,
+    id: 9004,
+    type: { value: 'company', label: 'Компанія' },
     name: 'ТОВ «Стальпром»',
     contact: 'Марія Гнатюк',
     phone: '+380 44 501 22 90',
     email: 'm.hnatiuk@stalprom.com.ua',
-    address: 'вул. Промислова, 8 · Львів',
     notes: '',
     discount: 7,
   },
   {
-    id: 5,
+    id: 9005,
+    type: { value: 'person', label: 'Особа' },
     name: 'Приватний замовник',
     contact: 'Без компанії',
     phone: '',
     email: '',
-    address: '',
     notes: '',
     discount: 0,
   },
@@ -519,7 +521,7 @@ export function isDemoObject(id: number): boolean {
   return id >= DEMO_OBJECT_ID_FROM
 }
 
-function client(id: number): Client | null {
+export function demoClient(id: number): Client | null {
   return DEMO_CLIENTS.find((item) => item.id === id) ?? null
 }
 
@@ -601,7 +603,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       name: 'ЖК «Пасаж», 3 черга',
       description: 'Монолітний каркас і зовнішні стіни третьої черги.',
       address: 'вул. Стеценка, 12 · Київ',
-      client: client(1),
+      client: demoClient(9001),
       status: status('in_progress'),
       started_at: '2026-06-02',
       finished_at: '2026-10-14',
@@ -626,7 +628,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       name: 'Котеджне містечко «Липки»',
       description: null,
       address: 'с. Гатне · Київська обл.',
-      client: client(3),
+      client: demoClient(9003),
       status: status('in_progress'),
       started_at: '2026-05-12',
       finished_at: '2026-08-28',
@@ -648,7 +650,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       name: 'Офіс «Кварц», 4 поверх',
       description: null,
       address: 'просп. Науки, 54 · Харків',
-      client: client(2),
+      client: demoClient(9002),
       status: status('paused'),
       started_at: '2026-07-01',
       finished_at: '2026-09-28',
@@ -670,7 +672,7 @@ export function demoObjects(workspaceId: number): ConstructionObject[] {
       name: 'Реконструкція складу №4',
       description: null,
       address: 'вул. Промислова, 8 · Львів',
-      client: client(4),
+      client: demoClient(9004),
       status: status('done'),
       started_at: '2026-03-04',
       finished_at: '2026-08-19',

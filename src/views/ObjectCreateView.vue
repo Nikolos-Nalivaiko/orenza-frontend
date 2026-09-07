@@ -176,8 +176,12 @@ function resetForm(): void {
   objects.clearDraft()
 }
 
-function addClient(name: string): void {
-  form.clientId = objects.addClient(name).id
+async function addClient(name: string): Promise<void> {
+  const client = await objects.addClient(name)
+
+  if (client !== null) {
+    form.clientId = client.id
+  }
 }
 
 async function submit(): Promise<void> {

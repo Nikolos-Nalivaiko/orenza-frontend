@@ -13,7 +13,7 @@
 
 import { parseAmount } from '@/lib/amount'
 import { comparePayments, objectFinance, type Payment } from '@/lib/finance'
-import { daysBetween, type Client, type ConstructionObject } from '@/lib/objects'
+import { daysBetween, type Client, type ClientType, type ConstructionObject } from '@/lib/objects'
 import { isEmail } from '@/lib/validation'
 
 /* ── Обʼєкти замовника ─────────────────────────────────────────── */
@@ -277,26 +277,34 @@ export function validateClientDiscount(value: string): string | undefined {
 /* ── Контакти ──────────────────────────────────────────────────── */
 
 export interface ClientForm {
+  type: ClientType
   name: string
   contact: string
   phone: string
   email: string
-  address: string
+}
+
+export const CLIENT_TYPE_LABELS: Record<ClientType, string> = {
+  person: 'Особа',
+  company: 'Компанія',
+}
+
+export function emptyClientForm(type: ClientType = 'person'): ClientForm {
+  return { type, name: '', contact: '', phone: '', email: '' }
 }
 
 export type ClientErrors = Partial<Record<keyof ClientForm, string>>
 
 export const CLIENT_NAME_MIN = 2
 export const CLIENT_NAME_MAX = 255
-export const CLIENT_ADDRESS_MAX = 255
 
 export function clientForm(client: Client): ClientForm {
   return {
+    type: client.type.value,
     name: client.name,
     contact: client.contact,
     phone: client.phone,
     email: client.email,
-    address: client.address,
   }
 }
 
@@ -309,7 +317,7 @@ export function validateClientForm(form: ClientForm): ClientErrors {
   const name = form.name.trim()
 
   if (name === '') {
-    errors.name = 'Вкажіть, як звати замовника'
+    errors.name = form.type === 'company' ? 'Вкажіть назву компанії' : 'Вкажіть імʼя та прізвище'
   } else if (name.length < CLIENT_NAME_MIN) {
     errors.name = `Мінімум ${CLIENT_NAME_MIN} символи`
   } else if (name.length > CLIENT_NAME_MAX) {
@@ -318,10 +326,6 @@ export function validateClientForm(form: ClientForm): ClientErrors {
 
   if (form.email.trim() !== '' && !isEmail(form.email)) {
     errors.email = 'Схоже на помилку в адресі'
-  }
-
-  if (form.address.trim().length > CLIENT_ADDRESS_MAX) {
-    errors.address = `Максимум ${CLIENT_ADDRESS_MAX} символів`
   }
 
   return errors
@@ -333,19 +337,19 @@ export function hasClientErrors(errors: ClientErrors): boolean {
 
 /** Тіло запиту PATCH /api/v1/workspaces/{id}/clients/{client}. */
 export interface ClientPayload {
+  type: ClientType
   name: string
   contact: string
   phone: string
   email: string
-  address: string
 }
 
 export function buildClientPayload(form: ClientForm): ClientPayload {
   return {
+    type: form.type,
     name: form.name.trim(),
-    contact: form.contact.trim(),
+    contact: form.type === 'company' ? form.contact.trim() : '',
     phone: form.phone.trim(),
     email: form.email.trim().toLowerCase(),
-    address: form.address.trim(),
   }
 }

@@ -92,10 +92,15 @@ onMounted(() => {
   }
 })
 
-function createClient(form: ClientForm): void {
-  const client = objects.createClient(form)
+async function createClient(form: ClientForm): Promise<void> {
+  const client = await objects.createClient(form)
 
-  void router.push({ name: 'client', params: { id: client.id } })
+  if (client === null) {
+    return
+  }
+
+  creatingClient.value = false
+  await router.push({ name: 'client', params: { id: client.id } })
 }
 
 function pick(id: number): void {
@@ -255,7 +260,10 @@ function savePayment(payload: PaymentPayload): void {
 
     <ClientCreateDialog
       v-if="creatingClient"
+      :saving="objects.isSaving"
+      :server-error="objects.error"
       @create="createClient"
+      @dirty="objects.reset()"
       @close="creatingClient = false"
     />
 

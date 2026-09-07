@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
@@ -30,7 +30,6 @@ import {
 } from '@/lib/services'
 import {
   buildObjectPayload,
-  DEMO_CLIENTS,
   demoObjects,
   emptyObjectForm,
   formatDay,
@@ -38,6 +37,8 @@ import {
   isDemoObject,
   newPublicToken,
   normalizeClient,
+  demoClient,
+  DEMO_OBJECT_ID_FROM,
   normalizeObject,
   OBJECT_STATUS_LABELS,
   type Client,
@@ -47,6 +48,7 @@ import {
   type ObjectStatus,
 } from '@/lib/objects'
 import { buildClientPayload, type ClientForm } from '@/lib/clients'
+import { api, ApiError } from '@/lib/http'
 import { transition, type ActivityKind, type ActivityRecord } from '@/lib/activity'
 import { photosOf, type ObjectPhoto } from '@/lib/photos'
 
@@ -55,7 +57,6 @@ import { photosOf, type ObjectPhoto } from '@/lib/photos'
  * записів і правила ті самі, що поїдуть на бекенд.
  */
 const STORAGE_KEY = 'orenza.objects'
-const CLIENTS_KEY = 'orenza.clients'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
 const ACTIVITY_KEY = 'orenza.objects.activity'
@@ -107,14 +108,66 @@ function readView(): ObjectsView {
   }
 }
 
+interface StoredObject extends Omit<ConstructionObject, 'client'> {
+  client: Client | null
+  client_id?: number | null
+}
+
 export const useObjectsStore = defineStore('objects', () => {
   const progress = useProgressStore()
   const workspaces = useWorkspacesStore()
 
-  const items = ref<ConstructionObject[]>(
-    readList<ConstructionObject>(STORAGE_KEY, []).map(normalizeObject),
-  )
+  const links = ref<Record<number, number | null>>({})
+
+  try {
+    localStorage.removeItem('orenza.clients')
+  } catch {
+    // ignore
+  }
+
+  const items = ref<ConstructionObject[]>(hydrate(readList<StoredObject>(STORAGE_KEY, [])))
   const clients = ref<Client[]>([])
+
+  function resolveClient(id: number | null): Client | null {
+    if (id === null) {
+      return null
+    }
+
+    return id >= DEMO_OBJECT_ID_FROM
+      ? demoClient(id)
+      : (clients.value.find((item) => item.id === id) ?? null)
+  }
+
+  function storedClientId(stored: StoredObject): number | null {
+    if (stored.client_id !== undefined) {
+      return stored.client_id
+    }
+
+    const legacy = stored.client?.id ?? null
+
+    if (legacy === null) {
+      return null
+    }
+
+    return legacy < DEMO_OBJECT_ID_FROM ? legacy + DEMO_OBJECT_ID_FROM : legacy
+  }
+
+  function hydrate(stored: StoredObject[]): ConstructionObject[] {
+    return stored.map((item) => {
+      const clientId = storedClientId(item)
+
+      links.value[item.id] = clientId
+
+      return normalizeObject({ ...item, client: resolveClient(clientId) })
+    })
+  }
+
+  watch(clients, () => {
+    items.value = items.value.map((object) => ({
+      ...object,
+      client: resolveClient(links.value[object.id] ?? null),
+    }))
+  })
 
   /** Журнал дій — те, чого з самого обʼєкта не відновити. Див. lib/activity. */
   const activity = ref<ActivityRecord[]>(readList<ActivityRecord>(ACTIVITY_KEY, []))
@@ -156,7 +209,12 @@ export const useObjectsStore = defineStore('objects', () => {
   function persist(): void {
     write(
       STORAGE_KEY,
-      items.value.map((item) => ({ ...item, cover: null })),
+      items.value.map((item) => ({
+        ...item,
+        cover: null,
+        client: null,
+        client_id: links.value[item.id] ?? null,
+      })),
     )
   }
 
@@ -175,18 +233,23 @@ export const useObjectsStore = defineStore('objects', () => {
       // редагувати, архівувати й видаляти, як і власні.
       if (raw === null && workspaceId !== null) {
         items.value = demoObjects(workspaceId)
+
+        for (const object of items.value) {
+          links.value[object.id] = object.client?.id ?? null
+        }
+
         persist()
 
         return
       }
 
-      const stored = readList<ConstructionObject>(STORAGE_KEY, [])
+      const stored = readList<StoredObject>(STORAGE_KEY, [])
 
-      items.value = stored.map(normalizeObject)
+      items.value = hydrate(stored)
 
-      // Обʼєкт із минулої сесії міг лишитись без публічного токена: видаємо
-      // його один раз і одразу зберігаємо, щоб посилання не мінялось.
-      if (stored.some((item) => item.public_token === undefined)) {
+      // Обʼєкт із минулої сесії міг лишитись без публічного токена або копією
+      // замовника всередині: перезаписуємо сховище в новому форматі.
+      if (stored.some((item) => item.public_token === undefined || item.client_id === undefined)) {
         persist()
       }
     } finally {
@@ -215,7 +278,7 @@ export const useObjectsStore = defineStore('objects', () => {
       // TODO: GET /api/v1/track/{token} — окремий публічний ендпоінт.
       await progress.track(delay(320))
 
-      items.value = readList<ConstructionObject>(STORAGE_KEY, []).map(normalizeObject)
+      items.value = hydrate(readList<StoredObject>(STORAGE_KEY, []))
     } finally {
       isLoading.value = false
       loaded.value = true
@@ -745,64 +808,66 @@ export const useObjectsStore = defineStore('objects', () => {
     return id === null ? null : (clients.value.find((client) => client.id === id) ?? null)
   }
 
-  function persistClients(): void {
-    write(CLIENTS_KEY, clients.value)
+  function clientsPath(): string | null {
+    const slug = workspaces.current?.slug
+
+    return slug === undefined ? null : `/workspaces/${slug}/clients`
+  }
+
+  function clientError(cause: unknown, fallback: string): string {
+    return cause instanceof ApiError ? cause.message : fallback
   }
 
   async function fetchClients(): Promise<void> {
+    const path = clientsPath()
+
+    if (path === null) {
+      isLoadingClients.value = false
+
+      return
+    }
+
     isLoadingClients.value = true
 
     try {
-      // TODO: GET /api/v1/workspaces/{id}/clients
-      await progress.track(delay(420))
+      const list = await progress.track(api.get<Client[]>(path))
 
-      const stored = readList<Client>(CLIENTS_KEY, []).map(normalizeClient)
-
-      // Демозамовники сіються один раз — далі вони звичайні записи, яким
-      // правлять контакти й знижку нарівні з власними.
-      const seeded = DEMO_CLIENTS.filter((demo) => !stored.some((item) => item.id === demo.id))
-
-      clients.value = [...seeded, ...stored].sort((left, right) => left.id - right.id)
-
-      if (seeded.length > 0) {
-        persistClients()
-      }
+      clients.value = list.map(normalizeClient)
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося завантажити замовників.')
     } finally {
-      // Навіть якщо запит впаде, селект не має лишитись у скелетоні назавжди.
       isLoadingClients.value = false
     }
   }
 
-  /**
-   * Замовника заводять двома шляхами: повною формою з довідника й одним іменем
-   * прямо з форми обʼєкта. Запис виходить той самий — різниться лише те,
-   * скільки про людину відомо на момент створення.
-   */
-  function createClient(form: ClientForm): Client {
-    const client: Client = {
-      // TODO: POST /api/v1/workspaces/{id}/clients — id віддасть бекенд.
-      id: Math.max(100, ...clients.value.map((item) => item.id)) + 1,
-      ...buildClientPayload(form),
-      notes: '',
-      // Персональну знижку ставлять у картці: спершу людина, потім умови.
-      discount: 0,
+  async function createClient(form: ClientForm): Promise<Client | null> {
+    const path = clientsPath()
+
+    if (path === null) {
+      return null
     }
 
-    clients.value = [...clients.value, client]
-    persistClients()
+    isSaving.value = true
+    error.value = null
 
-    return client
+    try {
+      const created = await progress.track(api.post<Client>(path, buildClientPayload(form)))
+      const client = normalizeClient(created)
+
+      clients.value = [...clients.value, client]
+
+      return client
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося зберегти замовника.')
+
+      return null
+    } finally {
+      isSaving.value = false
+    }
   }
 
-  /** Замовника можна завести прямо з форми обʼєкта — щоб не кидати введене. */
-  function addClient(name: string): Client {
-    return createClient({
-      name,
-      contact: 'Створено з картки обʼєкта',
-      phone: '',
-      email: '',
-      address: '',
-    })
+  async function addClient(name: string): Promise<Client | null> {
+    return createClient({ type: 'person', name, contact: '', phone: '', email: '' })
   }
 
   /* ── Картка замовника ────────────────────────────────────────── */
@@ -812,40 +877,61 @@ export const useObjectsStore = defineStore('objects', () => {
    * правка в довіднику одразу їде і в обʼєкти: інакше в шапці обʼєкта лишався
    * б старий телефон, і власник дзвонив би за ним.
    */
-  function patchClient(id: number, changes: Partial<Client>): void {
+  function applyClient(next: Client): void {
+    clients.value = clients.value.map((item) => (item.id === next.id ? next : item))
+  }
+
+  async function patchClient(id: number, changes: Record<string, unknown>): Promise<void> {
+    const path = clientsPath()
     const client = findClient(id)
 
-    if (client === null) {
+    if (path === null || client === null) {
       return
     }
 
-    const next = { ...client, ...changes }
+    error.value = null
 
-    clients.value = clients.value.map((item) => (item.id === id ? next : item))
-    persistClients()
+    try {
+      const updated = await progress.track(api.patch<Client>(`${path}/${id}`, changes))
 
-    items.value = items.value.map((object) =>
-      object.client?.id === id ? { ...object, client: next } : object,
-    )
-    persist()
+      applyClient(normalizeClient(updated))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося зберегти зміни.')
+    }
   }
 
-  /** Контакти замовника — те, за чим із ним звʼязуються; правлять їх з картки. */
-  function updateClient(id: number, form: ClientForm): void {
-    patchClient(id, buildClientPayload(form))
+  async function updateClient(id: number, form: ClientForm): Promise<void> {
+    await patchClient(id, { ...buildClientPayload(form) })
   }
 
-  /** Опис замовника: як із ним працювати. Один текст, а не стрічка подій. */
-  function setClientNotes(id: number, notes: string): void {
-    patchClient(id, { notes: notes.trim() })
+  async function setClientNotes(id: number, notes: string): Promise<void> {
+    await patchClient(id, { notes: notes.trim() })
   }
 
-  /**
-   * Персональна знижка — підказка для нових обʼєктів: уже заведені рахуються
-   * за власною знижкою, тож перерахунку тут не відбувається.
-   */
-  function setClientDiscount(id: number, discount: number): void {
-    patchClient(id, { discount })
+  async function setClientDiscount(id: number, discount: number): Promise<void> {
+    await patchClient(id, { discount })
+  }
+
+  async function deleteClient(id: number): Promise<boolean> {
+    const path = clientsPath()
+
+    if (path === null) {
+      return false
+    }
+
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${id}`))
+
+      clients.value = clients.value.filter((item) => item.id !== id)
+
+      return true
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося видалити замовника.')
+
+      return false
+    }
   }
 
   /** Позиція матеріалу у вигляді, у якому її поверне бекенд. */
@@ -922,7 +1008,7 @@ export const useObjectsStore = defineStore('objects', () => {
       name: payload.name,
       description: payload.description ?? null,
       address: payload.address,
-      client: findClient(form.clientId),
+      client: resolveClient(form.clientId),
       status: { value: payload.status, label: OBJECT_STATUS_LABELS[payload.status] },
       started_at: payload.started_at ?? null,
       finished_at: payload.finished_at ?? null,
@@ -942,6 +1028,7 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     items.value = [...items.value, object]
+    links.value[object.id] = form.clientId
 
     persist()
     clearDraft()
@@ -1039,6 +1126,7 @@ export const useObjectsStore = defineStore('objects', () => {
     createClient,
     addClient,
     updateClient,
+    deleteClient,
     setClientNotes,
     setClientDiscount,
     create,

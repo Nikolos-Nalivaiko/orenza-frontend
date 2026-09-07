@@ -19,11 +19,11 @@ const TODAY = '2026-09-02'
 
 const CLIENT: Client = {
   id: 1,
+  type: { value: 'company', label: 'Компанія' },
   name: 'ТОВ «Мегабуд»',
   contact: 'Ірина Ковальчук',
   phone: '+380 67 214 30 11',
   email: 'i.kovalchuk@megabud.ua',
-  address: 'вул. Антоновича, 44 · Київ',
   notes: '',
   discount: 5,
 }
@@ -264,20 +264,32 @@ describe('валідація', () => {
 
   it('обовʼязкова лише назва, пошта — тільки якщо її ввели', () => {
     expect(
-      validateClientForm({ name: '', contact: '', phone: '', email: '', address: '' }).name,
-    ).toBe('Вкажіть, як звати замовника')
+      validateClientForm({
+        type: 'person',
+        name: '',
+        contact: '',
+        phone: '',
+        email: '',
+      }).name,
+    ).toBe('Вкажіть імʼя та прізвище')
 
     expect(
-      validateClientForm({ name: 'ТОВ «Мегабуд»', contact: '', phone: '', email: '', address: '' }),
+      validateClientForm({
+        type: 'company',
+        name: 'ТОВ «Мегабуд»',
+        contact: '',
+        phone: '',
+        email: '',
+      }),
     ).toEqual({})
 
     expect(
       validateClientForm({
+        type: 'company',
         name: 'ТОВ «Мегабуд»',
         contact: '',
         phone: '',
         email: 'не пошта',
-        address: '',
       }).email,
     ).toBe('Схоже на помилку в адресі')
   })

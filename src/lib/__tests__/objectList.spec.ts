@@ -22,11 +22,11 @@ const TODAY = '2026-09-02'
 
 const CLIENT: Client = {
   id: 1,
+  type: { value: 'company', label: 'Компанія' },
   name: 'ТОВ «Мегабуд»',
   contact: 'Ірина Ковальчук',
   phone: '',
   email: '',
-  address: '',
   notes: '',
   discount: 5,
 }

@@ -6,6 +6,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import TextField from '@/components/ui/TextField.vue'
 import { formatAmount } from '@/lib/amount'
 import {
+  CLIENT_TYPE_LABELS,
   clientForm,
   formatObjects,
   hasClientErrors,
@@ -19,7 +20,7 @@ import {
   type ClientTotals,
 } from '@/lib/clients'
 import { dueState, DUE_STATE_LABELS } from '@/lib/finance'
-import type { Client } from '@/lib/objects'
+import type { Client, ClientType } from '@/lib/objects'
 import { monogram } from '@/lib/workspaces'
 
 /**
@@ -48,6 +49,13 @@ const discount = ref('')
 const discountError = ref<string | undefined>()
 
 const regular = computed(() => isRegularClient(props.totals.objects))
+
+const isCompany = computed(() => props.client.type.value === 'company')
+const editingCompany = computed(() => form.type === 'company')
+
+function chooseType(type: ClientType): void {
+  form.type = type
+}
 
 /** Переплату показуємо як переплату — сума з мінусом ні про що не каже. */
 const overpaid = computed(() => props.totals.due < 0)
@@ -123,8 +131,11 @@ function saveDiscount(): void {
           </h1>
 
           <p class="hero__contact">
-            <AppIcon name="user" />
-            {{ client.contact || 'контактну особу не вказано' }}
+            <AppIcon :name="isCompany ? 'building' : 'user'" />
+            <template v-if="isCompany">
+              {{ client.contact || 'контактну особу не вказано' }}
+            </template>
+            <template v-else>{{ CLIENT_TYPE_LABELS[client.type.value] }}</template>
           </p>
         </div>
 
@@ -193,9 +204,30 @@ function saveDiscount(): void {
 
       <!-- Контакти: у спокої це смуга звʼязку, у правці — форма на її місці. -->
       <div v-if="editing" class="edit">
+        <div class="edit__types" role="radiogroup" aria-label="Хто замовник">
+          <button
+            v-for="type in ['person', 'company'] as ClientType[]"
+            :key="type"
+            type="button"
+            class="edit__type"
+            :class="{ 'edit__type--on': form.type === type }"
+            role="radio"
+            :aria-checked="form.type === type"
+            @click="chooseType(type)"
+          >
+            <AppIcon :name="type === 'company' ? 'building' : 'user'" />
+            {{ CLIENT_TYPE_LABELS[type] }}
+          </button>
+        </div>
+
         <div class="edit__grid">
-          <TextField v-model="form.name" label="Назва або ПІБ" :error="errors.name" />
           <TextField
+            v-model="form.name"
+            :label="editingCompany ? 'Назва компанії' : 'Імʼя та прізвище'"
+            :error="errors.name"
+          />
+          <TextField
+            v-if="editingCompany"
             v-model="form.contact"
             label="Контактна особа"
             optional
@@ -223,15 +255,6 @@ function saveDiscount(): void {
             :error="errors.email"
           >
             <template #prefix><AppIcon name="mail" /></template>
-          </TextField>
-          <TextField
-            v-model="form.address"
-            label="Адреса"
-            optional
-            placeholder="вул. Антоновича, 44 · Київ"
-            :error="errors.address"
-          >
-            <template #prefix><AppIcon name="pin" /></template>
           </TextField>
         </div>
 
@@ -392,6 +415,40 @@ function saveDiscount(): void {
 .regular :deep(.icon) {
   width: 13px;
   height: 13px;
+  color: var(--brand-strong);
+}
+
+.edit__types {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.edit__type {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  transition:
+    border-color 0.18s var(--ease),
+    background-color 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+
+.edit__type :deep(.icon) {
+  width: 15px;
+  height: 15px;
+}
+
+.edit__type--on {
+  border-color: var(--brand);
+  background: var(--brand-tint);
   color: var(--brand-strong);
 }
 

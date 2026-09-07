@@ -90,7 +90,6 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (cause) {
-
     if (typeof cause === 'object' && cause !== null && (cause as Error).name === 'AbortError') {
       throw cause
     }

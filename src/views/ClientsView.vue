@@ -72,14 +72,15 @@ function reset(): void {
   filters.value = defaultClientFilters()
 }
 
-/**
- * Заведеного замовника одразу відкриваємо: далі в ньому ставлять знижку й
- * пишуть, як із людиною працювати, — а це вже картка.
- */
-function create(form: ClientForm): void {
-  const client = objects.createClient(form)
+async function create(form: ClientForm): Promise<void> {
+  const client = await objects.createClient(form)
 
-  void router.push({ name: 'client', params: { id: client.id } })
+  if (client === null) {
+    return
+  }
+
+  creating.value = false
+  await router.push({ name: 'client', params: { id: client.id } })
 }
 </script>
 
@@ -147,7 +148,14 @@ function create(form: ClientForm): void {
 
     <ClientsTable v-else :rows="rows" :today="today" />
 
-    <ClientCreateDialog v-if="creating" @create="create" @close="creating = false" />
+    <ClientCreateDialog
+      v-if="creating"
+      :saving="objects.isSaving"
+      :server-error="objects.error"
+      @create="create"
+      @dirty="objects.reset()"
+      @close="creating = false"
+    />
   </div>
 </template>
 
