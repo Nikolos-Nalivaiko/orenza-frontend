@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
+import { setAuthToken } from '@/lib/http'
 import {
   buildLoginPayload,
   buildRegisterPayload,
@@ -9,10 +10,6 @@ import {
   type RegisterPayload,
 } from '@/lib/validation'
 
-/**
- * Форма користувача повторює App\Http\Resources\UserResource,
- * щоб при підключенні API нічого не переписувати.
- */
 export interface AuthUser {
   id: number
   first_name: string
@@ -29,7 +26,6 @@ export type AuthStatus = 'idle' | 'pending'
 
 const STORAGE_KEY = 'orenza.auth'
 
-/** Поки немає API — на цій пошті відтворюємо відповідь «email вже зайнято». */
 const TAKEN_EMAIL = 'taken@orenza.ua'
 
 interface StoredSession {
@@ -55,7 +51,6 @@ function writeSession(session: StoredSession | null): void {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
     }
   } catch {
-    // Приватний режим браузера — сесія просто не переживе перезавантаження.
   }
 }
 
@@ -68,7 +63,6 @@ function capitalise(value: string): string {
 }
 
 function userFromPayload(payload: Partial<RegisterPayload> & { email: string }): AuthUser {
-  // При вході бекенд поверне справжнє імʼя; поки виводимо частину пошти.
   const [local = 'користувач'] = payload.email.split('@')
   const first = capitalise(payload.first_name ?? local)
   const last = payload.last_name ?? ''
@@ -86,16 +80,14 @@ function userFromPayload(payload: Partial<RegisterPayload> & { email: string }):
   }
 }
 
-/**
- * Тимчасовий стор без мережі: імітує затримку та відповіді
- * /api/v1/auth/*. Місця під реальні запити позначені TODO.
- */
 export const useAuthStore = defineStore('auth', () => {
   const progress = useProgressStore()
   const restored = readSession()
 
   const user = ref<AuthUser | null>(restored?.user ?? null)
   const token = ref<string | null>(restored?.token ?? null)
+
+  setAuthToken(token.value)
   const status = ref<AuthStatus>('idle')
   const error = ref<string | null>(null)
 
@@ -111,6 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     user.value = session.user
     token.value = session.token
+    setAuthToken(session.token)
     writeSession(session)
   }
 
@@ -160,6 +153,7 @@ export const useAuthStore = defineStore('auth', () => {
     // TODO: POST /api/v1/auth/logout
     user.value = null
     token.value = null
+    setAuthToken(null)
     writeSession(null)
   }
 

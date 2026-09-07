@@ -9,11 +9,30 @@ CRM для строительных компаний, подрядчиков и 
 
 ```sh
 npm install
-npm run dev        # http://localhost:5173
+npm run dev        # http://localhost:3000
 npm run build      # type-check + production build
 npm run test:unit  # vitest
 npm run lint       # oxlint + eslint
 ```
+
+Порт 3000 зафиксирован (`strictPort`): именно этот origin бекенд разрешает в
+`FRONTEND_URL` и `SANCTUM_STATEFUL_DOMAINS`.
+
+## Подключение к API
+
+Адрес API — переменная `VITE_API_URL` (см. `.env.example`); для dev-сервера она уже
+задана в `.env.development` как `http://localhost:8080/api/v1`. Пустое значение
+означает «API на том же домене» — тогда используется относительный `/api/v1`.
+
+- `src/lib/http.ts` — транспорт: базовый адрес, `Bearer`-токен, распаковка конверта
+  `App\Support\ApiResponse` (`{ data, message, meta }`) и `ApiError` с `status`,
+  `error_code` и ошибками полей;
+- `src/lib/health.ts` + `src/stores/api.ts` — пинг `GET /api/v1/ping` на старте
+  приложения; если API не отвечает, внизу экрана появляется плашка `ApiOffline`;
+- экраны пока работают на локальных данных (`localStorage`) — реальные запросы
+  подключаются к сторам дальше, места помечены `TODO`.
+
+Бекенд поднимается из `orenza-backend`: `make up` (docker, `http://localhost:8080`).
 
 ## Что сделано
 
