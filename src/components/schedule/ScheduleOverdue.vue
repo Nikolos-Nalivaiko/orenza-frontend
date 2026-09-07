@@ -51,32 +51,35 @@ function shown(): ScheduleEvent[] {
 <style scoped>
 .late {
   display: grid;
-  gap: 10px;
-  padding: 14px;
+  gap: 14px;
+  padding: 22px;
   border: 1px solid rgb(200 52 31 / 26%);
-  border-radius: var(--r-md);
+  border-radius: var(--r-lg);
   background: var(--danger-tint);
 }
 
 .late__head {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgb(200 52 31 / 18%);
 }
 
 .late__icon {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 13px;
   background: rgb(200 52 31 / 12%);
   color: var(--danger);
 }
 
 .late__icon :deep(.icon) {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .late__intro {
@@ -86,7 +89,7 @@ function shown(): ScheduleEvent[] {
 }
 
 .late__title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--danger);

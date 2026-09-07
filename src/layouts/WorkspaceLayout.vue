@@ -3,14 +3,19 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import AppSidebar from '@/components/workspace/AppSidebar.vue'
-import { useDashboardStore } from '@/stores/dashboard'
+import { dashboardEvents } from '@/lib/dashboard'
+import { todayIso } from '@/lib/objects'
+import { useObjectsStore } from '@/stores/objects'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
 const COLLAPSE_KEY = 'orenza.sidebar.collapsed'
 
 const route = useRoute()
 const workspaces = useWorkspacesStore()
-const dashboard = useDashboardStore()
+const objects = useObjectsStore()
+
+/** День для лічильника прострочень; у шапці поруч живе його людський формат. */
+const day = todayIso()
 
 const collapsed = ref(false)
 const drawer = ref(false)
@@ -56,9 +61,8 @@ const subtitle = computed(() =>
   typeof route.meta.subtitle === 'string' ? route.meta.subtitle : '',
 )
 
-const overdue = computed(
-  () => dashboard.data?.tasks.filter((task) => !task.done && task.urgency === 'late').length ?? 0,
-)
+/** Лічильник біля «Дашборда» — те саме прострочене, що екран показує зверху. */
+const overdue = computed(() => dashboardEvents(objects.current, day).alarm.length)
 
 const today = new Intl.DateTimeFormat('uk-UA', {
   weekday: 'short',

@@ -30,9 +30,7 @@ export const NAV: NavGroup[] = [
     title: 'Робота',
     items: [
       { name: 'objects', label: 'Обʼєкти', icon: 'building' },
-      { name: 'estimates', label: 'Кошториси', icon: 'estimate', soon: true },
       { name: 'schedule', label: 'Графік робіт', icon: 'calendar' },
-      { name: 'materials', label: 'Матеріали', icon: 'box', soon: true },
     ],
   },
   {
@@ -41,7 +39,6 @@ export const NAV: NavGroup[] = [
       { name: 'clients', label: 'Замовники', icon: 'user' },
       { name: 'team', label: 'Команда', icon: 'team' },
       { name: 'finance', label: 'Фінанси', icon: 'wallet', soon: true },
-      { name: 'documents', label: 'Документи', icon: 'document', soon: true },
     ],
   },
 ]

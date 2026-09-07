@@ -29,9 +29,9 @@ withDefaults(defineProps<{ title: string; hint?: string; dim?: boolean; flush?: 
 .panel {
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
-  padding: 20px;
+  padding: 22px;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--paper-raised);
@@ -55,25 +55,28 @@ withDefaults(defineProps<{ title: string; hint?: string; dim?: boolean; flush?: 
 }
 
 .panel--flush .panel__body {
-  margin: 0 -20px -20px;
+  margin: 0 -22px -22px;
 }
 
+/* Заголовок карти відбитий лінійкою — так її вміст починається на одній висоті. */
 .panel__head {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .panel__text {
   display: grid;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 
 .panel__title {
   font-family: var(--font-display);
-  font-size: 15px;
+  font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }

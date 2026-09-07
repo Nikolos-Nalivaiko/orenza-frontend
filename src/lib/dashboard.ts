@@ -1,489 +1,352 @@
 /**
- * Дані дашборда. Бекенд поки має лише users/workspaces/memberships, тож
- * зведення збирається локально — типи навмисно описані так, як їх віддаватиме
- * майбутній GET /api/v1/workspaces/{id}/dashboard, щоб потім замінити лише
- * джерело даних.
+ * Дашборд власника. Свого джерела даних у нього немає й бути не може: гроші
+ * рахує та сама логіка, що й у картці обʼєкта, прострочене й найближчі події
+ * приходять із графіка робіт, а список обʼєктів — це рядки сторінки
+ * «Обʼєкти». Дашборд лише зводить їх в одну відповідь: з чого почати сьогодні.
+ *
+ * Тут навмисно немає динаміки по місяцях, воронки лідів і розкладки по
+ * постачальниках: історії на старті ще немає, а модулів під них — тим більше.
+ * Цифра, яку нема з чим порівняти, лише вдає аналітику.
  */
 
-export type Period = 'week' | 'month' | 'quarter'
+import type { IconName } from '@/components/ui/icons'
+import { ACTIVE_STATUSES, objectSummary, type ObjectRow } from '@/lib/objectList'
+import type { ConstructionObject } from '@/lib/objects'
+import {
+  buildEvents,
+  expectedTotal,
+  shiftDays,
+  type ScheduleEvent,
+  type ScheduleEventKind,
+} from '@/lib/schedule'
 
-export interface PeriodOption {
-  value: Period
-  label: string
-  hint: string
+/* ── Гроші простору ────────────────────────────────────────────── */
+
+export interface DashboardTotals {
+  /** Сума для замовників по активних обʼєктах — скільки грошей зараз у роботі. */
+  running: number
+  /** Профіт по всіх живих обʼєктах: сума для клієнта мінус собівартість. */
+  profit: number
+  /** Отримано за весь час. */
+  paid: number
+  /** Залишок до отримання — дебіторка простору; відʼємний означає переплату. */
+  due: number
+  /** Скільки обʼєктів дало цифру «в роботі». */
+  active: number
+  /** Скільки обʼєктів у зведенні взагалі. */
+  total: number
 }
-
-export const PERIODS: readonly PeriodOption[] = [
-  { value: 'week', label: 'Тиждень', hint: 'останні 7 днів' },
-  { value: 'month', label: 'Місяць', hint: 'останні 4 тижні' },
-  { value: 'quarter', label: 'Квартал', hint: 'останні 3 місяці' },
-]
-
-export type MetricTone = 'brand' | 'ink' | 'danger'
-export type MetricFormat = 'count' | 'money' | 'percent'
-
-export interface Metric {
-  key: string
-  label: string
-  value: number
-  format: MetricFormat
-  /** Зміна до попереднього такого ж періоду, у відсотках. */
-  delta: number
-  hint: string
-  /** Ряд для спарклайна — той самий показник по бакетах періоду. */
-  trend: number[]
-  tone: MetricTone
-}
-
-export interface FlowPoint {
-  label: string
-  income: number
-  spend: number
-}
-
-export interface CostSlice {
-  key: string
-  label: string
-  value: number
-}
-
-export type SiteStatus = 'ok' | 'risk' | 'late'
-
-export interface Site {
-  id: number
-  name: string
-  address: string
-  stage: string
-  progress: number
-  budget: number
-  spent: number
-  crew: string
-  deadline: string
-  status: SiteStatus
-}
-
-export type TaskUrgency = 'late' | 'today' | 'soon'
-
-export interface Task {
-  id: number
-  title: string
-  site: string
-  due: string
-  urgency: TaskUrgency
-  done: boolean
-}
-
-export type FeedKind = 'act' | 'delivery' | 'crew' | 'money' | 'lead'
-
-export interface FeedItem {
-  id: number
-  time: string
-  text: string
-  site: string
-  kind: FeedKind
-}
-
-export interface Crew {
-  id: number
-  name: string
-  people: number
-  load: number
-  site: string
-}
-
-export interface DashboardData {
-  metrics: Metric[]
-  flow: FlowPoint[]
-  costs: CostSlice[]
-  sites: Site[]
-  tasks: Task[]
-  feed: FeedItem[]
-  crews: Crew[]
-}
-
-export const SITE_STATUS_LABELS: Record<SiteStatus, string> = {
-  ok: 'За графіком',
-  risk: 'Ризик',
-  late: 'Відставання',
-}
-
-export const FEED_KIND_LABELS: Record<FeedKind, string> = {
-  act: 'Акт',
-  delivery: 'Постачання',
-  crew: 'Бригада',
-  money: 'Гроші',
-  lead: 'Лід',
-}
-
-/* ── Форматування ──────────────────────────────────────────────── */
-
-const integer = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 0 })
-const decimal = new Intl.NumberFormat('uk-UA', {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-})
 
 /**
- * Гроші в підписах графіка й плиток скорочуємо: «1,2 млн», «860 тис».
- * Знак ₴ додається окремо — щоб у щільних місцях його можна було лишити
- * тільки в заголовку осі.
+ * Архів у зведення не входить: обʼєкт ховають саме тоді, коли по ньому вже
+ * нема чого рахувати, і його борг не має щоранку висіти в дебіторці.
  */
-export function formatMoney(value: number): string {
-  const abs = Math.abs(value)
-
-  if (abs >= 1_000_000) {
-    return `${decimal.format(value / 1_000_000)} млн`
+export function dashboardTotals(objects: ConstructionObject[], today: string): DashboardTotals {
+  const totals: DashboardTotals = {
+    running: 0,
+    profit: 0,
+    paid: 0,
+    due: 0,
+    active: 0,
+    total: 0,
   }
 
-  if (abs >= 1_000) {
-    return `${integer.format(Math.round(value / 1_000))} тис`
+  for (const object of objects) {
+    if (object.archived_at !== null) {
+      continue
+    }
+
+    const summary = objectSummary(object, today)
+
+    totals.total += 1
+    totals.profit += summary.profit
+    totals.paid += summary.paid
+    totals.due += summary.due
+
+    if (ACTIVE_STATUSES.includes(object.status.value)) {
+      totals.active += 1
+      totals.running += summary.client
+    }
   }
 
-  return integer.format(Math.round(value))
+  return totals
 }
 
-export function formatMetric(value: number, format: MetricFormat): string {
-  if (format === 'money') {
-    return formatMoney(value)
+/**
+ * Нараховано команді. Це та сама «людина × обсяг × ставка» з бригад на
+ * роботах, що й у картці співробітника, — просто підсумована з іншого боку,
+ * тож окремого обліку виплат тут немає: простір їх поки не веде.
+ */
+export function crewAccrued(objects: ConstructionObject[]): number {
+  let accrued = 0
+
+  for (const object of objects) {
+    if (object.archived_at !== null) {
+      continue
+    }
+
+    for (const service of object.services) {
+      for (const worker of service.workers) {
+        accrued += worker.volume * worker.rate
+      }
+    }
   }
 
-  return format === 'percent' ? `${Math.round(value)}%` : integer.format(Math.round(value))
+  return accrued
 }
 
-/** «+12%» / «−4%». Нуль лишається без знака. */
-export function formatDelta(delta: number): string {
-  const rounded = Math.round(Math.abs(delta))
+/* ── Рядок показників ──────────────────────────────────────────── */
 
-  if (rounded === 0) {
-    return '0%'
+export type KpiTone = 'plain' | 'brand' | 'danger'
+
+/**
+ * Смужка під цифрою. Це завжди реальна пропорція між двома числами простору
+ * (оплачено до суми, активні до всіх) — а не намальована динаміка за період,
+ * якої простір ще не має.
+ */
+export interface KpiMeter {
+  /** Частка від 0 до 1. */
+  share: number
+  label: string
+}
+
+/**
+ * Два питання власника, на які відповідає рядок цифр: скільки роботи зараз
+ * у руках і як із неї розраховуються. Дашборд показує їх окремими блоками —
+ * одним рядом із пʼяти плиток вони читаються як список без сенсу.
+ */
+export type KpiGroup = 'work' | 'settlement'
+
+export interface Kpi {
+  key: string
+  label: string
+  /** Усі показники — гроші, тож формат один на всіх. */
+  value: number
+  hint: string
+  tone: KpiTone
+  icon: IconName
+  group: KpiGroup
+  /** Розділ, який пояснює цифру: плитка веде саме туди. */
+  to: string
+  meter: KpiMeter | null
+}
+
+function share(part: number, whole: number): number {
+  return whole === 0 ? 0 : Math.min(Math.max(part / whole, 0), 1)
+}
+
+function percent(part: number, whole: number): number {
+  return whole === 0 ? 0 : Math.round((part / whole) * 100)
+}
+
+/** 1 обʼєкт, 2–4 обʼєкти, 5+ обʼєктів. */
+export function formatObjects(count: number): string {
+  const tail = count % 100 >= 11 && count % 100 <= 14 ? 0 : count % 10
+
+  if (tail === 1) {
+    return `${count} обʼєкт`
   }
 
-  return `${delta > 0 ? '+' : '−'}${rounded}%`
+  return tail >= 2 && tail <= 4 ? `${count} обʼєкти` : `${count} обʼєктів`
 }
 
-/* ── Демодані ──────────────────────────────────────────────────── */
+/**
+ * Чотири цифри власника — і пʼята, зарплатна, у компанії: в особистому
+ * просторі бригади немає, тож і питання «скільки винен людям» не стоїть.
+ */
+export function dashboardKpis(totals: DashboardTotals, crew: number | null): Kpi[] {
+  // Сума для замовників по живих обʼєктах: due — це та сама сума мінус оплати.
+  const contracted = totals.paid + totals.due
 
-const SITES: Site[] = [
-  {
-    id: 1,
-    name: 'ЖК «Пасаж», 3 черга',
-    address: 'вул. Стеценка, 12 · Київ',
-    stage: 'Монолітні роботи',
-    progress: 68,
-    budget: 2_400_000,
-    spent: 1_608_000,
-    crew: 'Бригада №3',
-    deadline: '14 жов',
-    status: 'ok',
-  },
-  {
-    id: 2,
-    name: 'Котеджне містечко «Липки»',
-    address: 'с. Гатне · Київська обл.',
-    stage: 'Покрівля',
-    progress: 41,
-    budget: 1_120_000,
-    spent: 596_000,
-    crew: 'Бригада №1',
-    deadline: '2 жов',
-    status: 'risk',
-  },
-  {
-    id: 3,
-    name: 'Реконструкція складу №4',
-    address: 'вул. Промислова, 8 · Львів',
-    stage: 'Оздоблення',
-    progress: 87,
-    budget: 860_000,
-    spent: 792_000,
-    crew: 'Підряд «Стальпром»',
-    deadline: '19 вер',
-    status: 'ok',
-  },
-  {
-    id: 4,
-    name: 'Офіс «Кварц», 4 поверх',
-    address: 'просп. Науки, 54 · Харків',
-    stage: 'Демонтаж',
-    progress: 23,
-    budget: 640_000,
-    spent: 214_000,
-    crew: 'Бригада №2',
-    deadline: '28 вер',
-    status: 'late',
-  },
-]
+  const kpis: Kpi[] = [
+    {
+      key: 'running',
+      label: 'В роботі зараз',
+      value: totals.running,
+      hint: `${formatObjects(totals.active)} у роботі`,
+      tone: 'plain',
+      icon: 'building',
+      group: 'work',
+      to: 'objects',
+      meter:
+        totals.total === 0
+          ? null
+          : {
+              share: share(totals.active, totals.total),
+              label: `з ${formatObjects(totals.total)} простору`,
+            },
+    },
+    {
+      key: 'profit',
+      label: 'Профіт',
+      value: totals.profit,
+      hint: `по ${formatObjects(totals.total)}`,
+      tone: totals.profit < 0 ? 'danger' : 'brand',
+      icon: 'spark',
+      group: 'work',
+      to: 'objects',
+      meter:
+        contracted === 0
+          ? null
+          : {
+              share: share(totals.profit, contracted),
+              label: `маржа ${percent(totals.profit, contracted)}%`,
+            },
+    },
+    {
+      key: 'paid',
+      label: 'Оплачено',
+      value: totals.paid,
+      hint: 'отримано за весь час',
+      tone: 'plain',
+      icon: 'wallet',
+      group: 'settlement',
+      to: 'objects',
+      meter:
+        contracted === 0
+          ? null
+          : {
+              share: share(totals.paid, contracted),
+              label: `${percent(totals.paid, contracted)}% від суми обʼєктів`,
+            },
+    },
+    {
+      key: 'due',
+      label: 'Залишок до отримання',
+      value: totals.due,
+      hint: totals.due > 0 ? 'замовники ще винні' : 'боргів немає',
+      tone: totals.due > 0 ? 'danger' : 'plain',
+      icon: 'clock',
+      group: 'settlement',
+      to: 'clients',
+      meter:
+        contracted === 0
+          ? null
+          : {
+              share: share(totals.due, contracted),
+              label:
+                totals.due > 0
+                  ? `${percent(totals.due, contracted)}% ще не оплачено`
+                  : 'усе оплачено',
+            },
+    },
+  ]
 
-const TASKS: Task[] = [
-  {
-    id: 1,
-    title: 'Підписати КБ-2в за серпень',
-    site: 'ЖК «Пасаж»',
-    due: 'учора',
-    urgency: 'late',
-    done: false,
-  },
-  {
-    id: 2,
-    title: 'Замовити арматуру А500С, 18 т',
-    site: 'ЖК «Пасаж»',
-    due: 'сьогодні',
-    urgency: 'today',
-    done: false,
-  },
-  {
-    id: 3,
-    title: 'Погодити кошторис на покрівлю',
-    site: '«Липки»',
-    due: 'сьогодні',
-    urgency: 'today',
-    done: false,
-  },
-  {
-    id: 4,
-    title: 'Закрити табель бригади №2',
-    site: 'Офіс «Кварц»',
-    due: 'завтра',
-    urgency: 'soon',
-    done: false,
-  },
-  {
-    id: 5,
-    title: 'Виїзд на заміри вікон',
-    site: 'Склад №4',
-    due: 'пт, 12 вер',
-    urgency: 'soon',
-    done: true,
-  },
-]
+  if (crew === null) {
+    return kpis
+  }
 
-const FEED: FeedItem[] = [
-  {
-    id: 1,
-    time: '09:24',
-    text: 'Бетонування 3-го рівня завершено',
-    site: 'ЖК «Пасаж»',
-    kind: 'crew',
-  },
-  {
-    id: 2,
-    time: '08:50',
-    text: 'Прийнято 24 т арматури, накладна №1841',
-    site: 'ЖК «Пасаж»',
-    kind: 'delivery',
-  },
-  { id: 3, time: 'учора', text: 'Акт КБ-2в на 420 тис ₴ підписано', site: 'Склад №4', kind: 'act' },
-  {
-    id: 4,
-    time: 'учора',
-    text: 'Оплата підряднику «Стальпром» — 180 тис ₴',
-    site: 'Склад №4',
-    kind: 'money',
-  },
-  {
-    id: 5,
-    time: '2 дні тому',
-    text: 'Новий лід: ремонт офісу, 240 м²',
-    site: 'Без обʼєкта',
-    kind: 'lead',
-  },
-  {
-    id: 6,
-    time: '2 дні тому',
-    text: 'Заявка на автокран узгоджена',
-    site: '«Липки»',
-    kind: 'crew',
-  },
-]
-
-const CREWS: Crew[] = [
-  { id: 1, name: 'Бригада №3', people: 9, load: 96, site: 'ЖК «Пасаж»' },
-  { id: 2, name: 'Бригада №1', people: 6, load: 74, site: '«Липки»' },
-  { id: 3, name: 'Бригада №2', people: 5, load: 48, site: 'Офіс «Кварц»' },
-  { id: 4, name: 'Підряд «Стальпром»', people: 12, load: 88, site: 'Склад №4' },
-]
-
-interface PeriodSeed {
-  flow: FlowPoint[]
-  costs: [number, number, number, number]
-  metrics: [Metric, Metric, Metric, Metric]
+  return [
+    ...kpis,
+    {
+      key: 'crew',
+      label: 'До виплати команді',
+      value: crew,
+      hint: 'нараховано за роботами',
+      tone: 'plain',
+      icon: 'team',
+      group: 'settlement',
+      to: 'team',
+      meter: null,
+    },
+  ]
 }
 
-function metric(
-  key: string,
-  label: string,
-  value: number,
-  format: MetricFormat,
-  delta: number,
-  hint: string,
-  trend: number[],
-  tone: MetricTone,
-): Metric {
-  return { key, label, value, format, delta, hint, trend, tone }
+/* ── Портфель обʼєктів ─────────────────────────────────────────── */
+
+/** Скільки обʼєктів показує дашборд: далі за пʼятий уже йдуть у список. */
+export const PORTFOLIO_LIMIT = 5
+
+function byUrgency(left: ObjectRow, right: ObjectRow): number {
+  // Прострочене зверху завжди: це вже не план, а розмова із замовником.
+  if (left.summary.overdue !== right.summary.overdue) {
+    return left.summary.overdue ? -1 : 1
+  }
+
+  const a = left.summary.daysLeft
+  const b = right.summary.daysLeft
+
+  // Обʼєкт без дати завершення не має витісняти той, у якого дедлайн горить.
+  if (a === null || b === null) {
+    if (a !== b) {
+      return a === null ? 1 : -1
+    }
+  } else if (a !== b) {
+    return a - b
+  }
+
+  // За однакової терміновості попереду той, де більше невиплачених грошей.
+  return right.summary.due - left.summary.due
 }
 
-const SEEDS: Record<Period, PeriodSeed> = {
-  week: {
-    flow: [
-      { label: 'Пн', income: 118_000, spend: 88_000 },
-      { label: 'Вт', income: 96_000, spend: 132_000 },
-      { label: 'Ср', income: 214_000, spend: 96_000 },
-      { label: 'Чт', income: 64_000, spend: 151_000 },
-      { label: 'Пт', income: 340_000, spend: 208_000 },
-      { label: 'Сб', income: 176_000, spend: 119_000 },
-      { label: 'Нд', income: 38_000, spend: 34_000 },
-    ],
-    costs: [412_000, 286_000, 118_000, 12_000],
-    metrics: [
-      metric(
-        'sites',
-        'Обʼєктів у роботі',
-        4,
-        'count',
-        0,
-        'усі активні',
-        [3, 3, 4, 4, 4, 4, 4],
-        'ink',
-      ),
-      metric(
-        'done',
-        'Виконано робіт',
-        1_046_000,
-        'money',
-        12,
-        'за 7 днів, ₴',
-        [118, 96, 214, 64, 340, 176, 38],
-        'brand',
-      ),
-      metric(
-        'margin',
-        'Кошторис освоєно',
-        62,
-        'percent',
-        4,
-        'від затвердженого',
-        [54, 56, 57, 58, 60, 61, 62],
-        'ink',
-      ),
-      metric(
-        'overdue',
-        'Прострочені задачі',
-        1,
-        'count',
-        -50,
-        'потребують дії',
-        [3, 3, 2, 2, 2, 1, 1],
-        'danger',
-      ),
-    ],
-  },
-  month: {
-    flow: [
-      { label: '1 тиж', income: 642_000, spend: 481_000 },
-      { label: '2 тиж', income: 818_000, spend: 612_000 },
-      { label: '3 тиж', income: 537_000, spend: 524_000 },
-      { label: '4 тиж', income: 914_000, spend: 703_000 },
-    ],
-    costs: [1_284_000, 812_000, 396_000, 68_000],
-    metrics: [
-      metric('sites', 'Обʼєктів у роботі', 6, 'count', 20, 'усі активні', [4, 5, 5, 6], 'ink'),
-      metric(
-        'done',
-        'Виконано робіт',
-        2_911_000,
-        'money',
-        18,
-        'за місяць, ₴',
-        [642, 818, 537, 914],
-        'brand',
-      ),
-      metric(
-        'margin',
-        'Кошторис освоєно',
-        58,
-        'percent',
-        9,
-        'від затвердженого',
-        [41, 47, 52, 58],
-        'ink',
-      ),
-      metric(
-        'overdue',
-        'Прострочені задачі',
-        3,
-        'count',
-        -25,
-        'потребують дії',
-        [6, 5, 4, 3],
-        'danger',
-      ),
-    ],
-  },
-  quarter: {
-    flow: [
-      { label: 'Черв', income: 2_140_000, spend: 1_724_000 },
-      { label: 'Лип', income: 2_648_000, spend: 1_982_000 },
-      { label: 'Серп', income: 2_372_000, spend: 1_836_000 },
-    ],
-    costs: [3_512_000, 2_218_000, 1_104_000, 208_000],
-    metrics: [
-      metric('sites', 'Обʼєктів у роботі', 9, 'count', 28, 'усі активні', [6, 8, 9], 'ink'),
-      metric(
-        'done',
-        'Виконано робіт',
-        7_160_000,
-        'money',
-        22,
-        'за квартал, ₴',
-        [2140, 2648, 2372],
-        'brand',
-      ),
-      metric(
-        'margin',
-        'Кошторис освоєно',
-        71,
-        'percent',
-        14,
-        'від затвердженого',
-        [52, 63, 71],
-        'ink',
-      ),
-      metric(
-        'overdue',
-        'Прострочені задачі',
-        5,
-        'count',
-        25,
-        'потребують дії',
-        [3, 4, 5],
-        'danger',
-      ),
-    ],
-  },
+/**
+ * Активні обʼєкти, з яких починають день: спочатку ті, що вийшли за строк,
+ * далі — за наближенням дедлайну. Це ті самі рядки, що й на сторінці
+ * «Обʼєкти», тож і показує їх той самий компонент — просто без фільтрів.
+ */
+export function portfolio(
+  objects: ConstructionObject[],
+  today: string,
+  limit: number = PORTFOLIO_LIMIT,
+): ObjectRow[] {
+  const rows = objects.flatMap<ObjectRow>((object) => {
+    if (object.archived_at !== null || !ACTIVE_STATUSES.includes(object.status.value)) {
+      return []
+    }
+
+    return [{ object, summary: objectSummary(object, today) }]
+  })
+
+  return rows.sort(byUrgency).slice(0, limit)
 }
 
-const COST_LABELS: [string, string, string, string] = [
-  'Матеріали',
-  'Роботи',
-  'Техніка',
-  'Логістика',
-]
-const COST_KEYS: [string, string, string, string] = ['materials', 'works', 'machinery', 'logistics']
+/**
+ * Обʼєкти, на які має сенс завести платіж просто зараз: усе, крім архіву,
+ * і спочатку найбільший борг. Швидка дія з дашборда не повинна змушувати
+ * згадувати назву — потрібний обʼєкт має стояти першим.
+ */
+export function payableObjects(objects: ConstructionObject[], today: string): ObjectRow[] {
+  const rows = objects.flatMap<ObjectRow>((object) =>
+    object.archived_at === null ? [{ object, summary: objectSummary(object, today) }] : [],
+  )
 
-export function demoDashboard(period: Period): DashboardData {
-  const seed = SEEDS[period]
+  return rows.sort((left, right) => right.summary.due - left.summary.due)
+}
+
+/* ── Події ─────────────────────────────────────────────────────── */
+
+/**
+ * «Горить» — це прострочені дедлайни обʼєктів і платежі, яких так і не
+ * дочекались. Дати початку сюди не йдуть: те, що на обʼєкт ще не вийшли, —
+ * питання планування, а не тривоги.
+ */
+export const ALARM_KINDS: readonly ScheduleEventKind[] = ['finish', 'payment']
+
+/** Найближчий тиждень — рівно стільки, скільки тримають у голові з ранку. */
+export const UPCOMING_DAYS = 7
+
+export interface DashboardEvents {
+  /** Прострочене — те, що вимагає уваги просто зараз. */
+  alarm: ScheduleEvent[]
+  /** Скільки з простроченого — гроші. */
+  alarmAmount: number
+  /** Найближчі 7 днів, без фільтрів: повний графік живе на своїй сторінці. */
+  upcoming: ScheduleEvent[]
+}
+
+export function dashboardEvents(
+  objects: ConstructionObject[],
+  today: string,
+  days: number = UPCOMING_DAYS,
+): DashboardEvents {
+  const events = buildEvents(objects, today)
+  const end = shiftDays(today, days)
+
+  const alarm = events.filter((event) => event.overdue && ALARM_KINDS.includes(event.kind))
 
   return {
-    metrics: seed.metrics.map((item) => ({ ...item, trend: [...item.trend] })),
-    flow: seed.flow.map((point) => ({ ...point })),
-    costs: seed.costs.map((value, index) => ({
-      key: COST_KEYS[index] ?? `slot-${index}`,
-      label: COST_LABELS[index] ?? '',
-      value,
-    })),
-    sites: SITES.map((site) => ({ ...site })),
-    tasks: TASKS.map((task) => ({ ...task })),
-    feed: FEED.map((item) => ({ ...item })),
-    crews: CREWS.map((crew) => ({ ...crew })),
+    alarm,
+    alarmAmount: expectedTotal(alarm),
+    upcoming: events.filter((event) => !event.overdue && event.date <= end),
   }
 }

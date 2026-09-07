@@ -62,7 +62,7 @@ const router = createRouter({
           path: '',
           name: 'dashboard',
           component: () => import('@/views/DashboardView.vue'),
-          meta: { title: 'Дашборд', subtitle: 'Обʼєкти, гроші та команда за обраний період' },
+          meta: { title: 'Дашборд', subtitle: 'Прострочене, гроші та найближчі події простору' },
         },
         {
           path: 'objects',
