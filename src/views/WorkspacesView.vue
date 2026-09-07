@@ -249,6 +249,8 @@ async function signOut(): Promise<void> {
           :owner-name="ownerName"
           :saving="workspaces.isSaving"
           :server-error="workspaces.error"
+          :name-error="workspaces.fieldErrors.name"
+          @dirty="workspaces.reset()"
           @submit="submit"
           @close="closeCreate"
         />
@@ -374,11 +376,6 @@ async function signOut(): Promise<void> {
   font-size: 14.5px;
 }
 
-/*
- * Старий і новий вміст лежать в одній клітинці ґрида, тож перетікають
- * один в одного на місці. З mode="out-in" елемент на час переходу зникав
- * зовсім — і все, що нижче, підстрибувало вгору.
- */
 .swap {
   display: grid;
 }
@@ -387,13 +384,11 @@ async function signOut(): Promise<void> {
   grid-area: 1 / 1;
 }
 
-/* Той, що йде, не має перехоплювати кліки по тому, що вже зʼявився. */
 .text-leave-active,
 .content-leave-active {
   pointer-events: none;
 }
 
-/* Заголовок і опис міняються перетіканням, а не стрибком. */
 .text-enter-active,
 .text-leave-active {
   transition:

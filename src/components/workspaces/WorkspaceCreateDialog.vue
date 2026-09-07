@@ -19,14 +19,14 @@ import {
 } from '@/lib/workspaces'
 
 const props = defineProps<{
-  /** Персональний простір може бути лише один. */
   personalTaken: boolean
   ownerName: string
   saving: boolean
   serverError: string | null
+  nameError?: string
 }>()
 
-const emit = defineEmits<{ submit: [form: WorkspaceForm]; close: [] }>()
+const emit = defineEmits<{ submit: [form: WorkspaceForm]; close: []; dirty: [] }>()
 
 const titleId = useId()
 const typesId = useId()
@@ -41,9 +41,12 @@ const errors = ref<WorkspaceErrors>({})
 
 watch(form, () => {
   errors.value = {}
+  emit('dirty')
 })
 
 const isCompany = computed(() => form.type === 'company')
+
+const alert = computed(() => (props.nameError === undefined ? props.serverError : null))
 
 const nameLength = computed(() => form.name.trim().length)
 
@@ -77,7 +80,6 @@ function choose(type: WorkspaceType): void {
   form.type = type
 }
 
-/** Стрілки перемикають тип, як у справжній групі радіокнопок. */
 function onTypeKeydown(event: KeyboardEvent): void {
   if (!['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) {
     return
@@ -106,7 +108,6 @@ function submit(): void {
   emit('submit', { ...form })
 }
 
-/** Escape закриває, Tab не випускає фокус із діалогу, ⌘/Ctrl+Enter надсилає. */
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     emit('close')
@@ -286,7 +287,7 @@ onBeforeUnmount(() => {
                 ? 'Її бачитимуть усі учасники простору.'
                 : 'Порожнє поле — візьмемо ваше імʼя.'
             "
-            :error="errors.name"
+            :error="errors.name ?? nameError"
             autofocus
           />
 
@@ -300,7 +301,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <p v-if="serverError" class="error" role="alert">{{ serverError }}</p>
+      <p v-if="alert" class="error" role="alert">{{ alert }}</p>
 
       <footer class="foot">
         <div class="foot__actions">

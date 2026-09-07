@@ -3,7 +3,12 @@ import { defineStore } from 'pinia'
 import { useAuthStore, type AuthUser } from './auth'
 import { useProgressStore } from './progress'
 import { api, ApiError } from '@/lib/http'
-import { buildWorkspacePayload, type Workspace, type WorkspaceForm } from '@/lib/workspaces'
+import {
+  buildWorkspacePayload,
+  type Workspace,
+  type WorkspaceErrors,
+  type WorkspaceForm,
+} from '@/lib/workspaces'
 
 const STORAGE_KEY = 'orenza.workspaces'
 
@@ -52,6 +57,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   const isLoading = ref(true)
   const isSaving = ref(false)
   const error = ref<string | null>(null)
+  const fieldErrors = ref<WorkspaceErrors>({})
 
   const current = computed(() => items.value.find((item) => item.id === currentId.value) ?? null)
   const isEmpty = computed(() => items.value.length === 0)
@@ -63,6 +69,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
 
   function reset(): void {
     error.value = null
+    fieldErrors.value = {}
   }
 
   async function fetchAll(): Promise<void> {
@@ -88,7 +95,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
 
   async function create(form: WorkspaceForm): Promise<Workspace | null> {
     isSaving.value = true
-    error.value = null
+    reset()
 
     try {
       const workspace = await progress.track(
@@ -100,6 +107,13 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
 
       return workspace
     } catch (cause) {
+      if (cause instanceof ApiError && cause.isValidation) {
+        fieldErrors.value = {
+          name: cause.fieldError('name'),
+          type: cause.fieldError('type'),
+        }
+      }
+
       error.value = messageFor(cause, 'Не вдалося створити простір.')
 
       return null
@@ -145,6 +159,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     isLoading,
     isSaving,
     error,
+    fieldErrors,
     hasPersonal,
     reset,
     fetchAll,
