@@ -410,7 +410,7 @@ export function hasObjectErrors(errors: ObjectErrors): boolean {
 
 export type ObjectCore = Omit<
   ConstructionObject,
-  'services' | 'payments' | 'discount_percent' | 'discount_amount'
+  'payments' | 'discount_percent' | 'discount_amount'
 >
 
 export interface ObjectCorePayload {
@@ -440,6 +440,7 @@ export function buildObjectCorePayload(form: ObjectForm): ObjectCorePayload {
     actual_started_at: form.factStartDate === '' ? null : form.factStartDate,
     actual_finished_at: form.factEndDate === '' ? null : form.factEndDate,
     ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
+    ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
   }
 }
 

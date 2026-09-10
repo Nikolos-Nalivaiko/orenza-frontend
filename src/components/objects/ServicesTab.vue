@@ -102,16 +102,16 @@ function askFactIfDone(id: number, status: ServiceStatus): void {
   }
 }
 
-function setStatus(id: number, status: ServiceStatus): void {
-  objects.setServiceStatus(props.object.id, [id], status)
+async function setStatus(id: number, status: ServiceStatus): Promise<void> {
+  await objects.setServiceStatus(props.object.id, [id], status)
   askFactIfDone(id, status)
 }
 
-function setStatusForSelected(status: ServiceStatus): void {
+async function setStatusForSelected(status: ServiceStatus): Promise<void> {
   const ids = [...selected.value]
 
-  objects.setServiceStatus(props.object.id, ids, status)
   selected.value = []
+  await objects.setServiceStatus(props.object.id, ids, status)
 
   // Масово питати обсяг по кожній роботі — знущання; питаємо, лише якщо
   // закрили рівно одну.
@@ -125,28 +125,32 @@ function openFact(id: number): void {
   factClosing.value = false
 }
 
-function saveFact(volume: number | null): void {
-  if (factFor.value !== null) {
-    objects.setServiceFact(props.object.id, factFor.value, volume)
-  }
+async function saveFact(volume: number | null): Promise<void> {
+  const id = factFor.value
 
   factFor.value = null
+
+  if (id !== null) {
+    await objects.setServiceFact(props.object.id, id, volume)
+  }
 }
 
-function saveWorkers(workers: ServiceWorkerPayload[]): void {
-  if (crewFor.value !== null) {
-    objects.setServiceWorkers(props.object.id, crewFor.value, workers)
-  }
+async function saveWorkers(workers: ServiceWorkerPayload[]): Promise<void> {
+  const id = crewFor.value
 
   crewFor.value = null
+
+  if (id !== null) {
+    await objects.setServiceWorkers(props.object.id, id, workers)
+  }
 }
 
-function remove(id: number): void {
-  objects.removeService(props.object.id, id)
+async function remove(id: number): Promise<void> {
+  await objects.removeService(props.object.id, id)
 }
 
-function add(payload: ServicePayload): void {
-  objects.addService(props.object.id, payload)
+async function add(payload: ServicePayload): Promise<void> {
+  await objects.addService(props.object.id, payload)
 }
 </script>
 

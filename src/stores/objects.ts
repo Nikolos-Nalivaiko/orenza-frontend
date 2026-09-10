@@ -98,7 +98,6 @@ function readView(): ObjectsView {
 
 interface ObjectExtras {
   cover: string | null
-  services: Service[]
   discount_percent: number | null
   discount_amount: number | null
   payments: Payment[]
@@ -107,7 +106,6 @@ interface ObjectExtras {
 function emptyExtras(): ObjectExtras {
   return {
     cover: null,
-    services: [],
     discount_percent: null,
     discount_amount: null,
     payments: [],
@@ -220,7 +218,6 @@ export const useObjectsStore = defineStore('objects', () => {
 
     for (const item of items.value) {
       const kept = {
-        services: item.services,
         discount_percent: item.discount_percent,
         discount_amount: item.discount_amount,
         payments: item.payments,
@@ -662,35 +659,72 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /* ── Роботи обʼєкта ──────────────────────────────────────────── */
 
+  function servicesPath(id: number): string | null {
+    const path = objectsPath()
+
+    return path === null ? null : `${path}/${id}/services`
+  }
+
+  function applyServices(id: number, services: Service[]): void {
+    patch(id, { services })
+  }
+
+  function mergedServices(current: Service[], updated: Service[]): Service[] {
+    const byId = new Map(updated.map((item) => [item.id, item]))
+
+    return current.map((item) => byId.get(item.id) ?? item)
+  }
+
   /**
    * Поява роботи в журнал не пишеться — стрічка виводить її з обʼєкта. А от
    * рух по стадіях, факт-обсяг і склад бригади не відновити з даних, тож їх
    * фіксуємо окремими записами.
    */
-  function addService(id: number, payload: ServicePayload): void {
+  async function addService(id: number, payload: ServicePayload): Promise<void> {
+    const path = servicesPath(id)
     const object = find(id)
 
-    if (object === null) {
+    if (path === null || object === null) {
       return
     }
 
-    patch(id, { services: [...object.services, toService(payload, nextId(object.services))] })
+    error.value = null
+
+    try {
+      const created = await progress.track(api.post<Service>(path, payload))
+
+      applyServices(id, [...object.services, created])
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося додати роботу.')
+    }
   }
 
-  function updateServices(
+  async function patchService(
     id: number,
-    serviceIds: number[],
-    change: (service: Service) => Service,
-  ): void {
+    serviceId: number,
+    changes: Record<string, unknown>,
+    fallback: string,
+  ): Promise<Service | null> {
+    const path = servicesPath(id)
     const object = find(id)
 
-    if (object === null) {
-      return
+    if (path === null || object === null) {
+      return null
     }
 
-    patch(id, {
-      services: object.services.map((item) => (serviceIds.includes(item.id) ? change(item) : item)),
-    })
+    error.value = null
+
+    try {
+      const updated = await progress.track(api.patch<Service>(`${path}/${serviceId}`, changes))
+
+      applyServices(id, mergedServices(object.services, [updated]))
+
+      return updated
+    } catch (cause) {
+      error.value = clientError(cause, fallback)
+
+      return null
+    }
   }
 
   /**
@@ -698,10 +732,15 @@ export const useObjectsStore = defineStore('objects', () => {
    * приймаємо список. Роботи, які вже стоять у цій стадії, зміненими не
    * рахуються: вони не мають потрапляти ні в стрічку, ні в підпис.
    */
-  function setServiceStatus(id: number, serviceIds: number[], value: ServiceStatus): void {
+  async function setServiceStatus(
+    id: number,
+    serviceIds: number[],
+    value: ServiceStatus,
+  ): Promise<void> {
+    const path = servicesPath(id)
     const object = find(id)
 
-    if (object === null) {
+    if (path === null || object === null) {
       return
     }
 
@@ -713,10 +752,21 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
+    error.value = null
+
+    try {
+      const updated = await progress.track(
+        api.patch<Service[]>(`${path}/status`, { ids: serviceIds, status: value }),
+      )
+
+      applyServices(id, mergedServices(object.services, updated))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося змінити статус робіт.')
+
+      return
+    }
+
     const label = SERVICE_STATUS_LABELS[value]
-
-    updateServices(id, serviceIds, (item) => ({ ...item, status: { value, label } }))
-
     const single = changed.length === 1 ? changed[0] : undefined
 
     log(
@@ -730,7 +780,11 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Факт-обсяг — те, за чим рахують гроші: його поява варта запису. */
-  function setServiceFact(id: number, serviceId: number, volume: number | null): void {
+  async function setServiceFact(
+    id: number,
+    serviceId: number,
+    volume: number | null,
+  ): Promise<void> {
     const object = find(id)
     const service = object?.services.find((item) => item.id === serviceId) ?? null
 
@@ -738,7 +792,16 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    updateServices(id, [serviceId], (item) => ({ ...item, actual_volume: volume }))
+    const saved = await patchService(
+      id,
+      serviceId,
+      { actual_volume: volume },
+      'Не вдалося зберегти факт-обсяг.',
+    )
+
+    if (saved === null) {
+      return
+    }
 
     log(
       id,
@@ -750,7 +813,11 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
-  function setServiceWorkers(id: number, serviceId: number, workers: ServiceWorkerPayload[]): void {
+  async function setServiceWorkers(
+    id: number,
+    serviceId: number,
+    workers: ServiceWorkerPayload[],
+  ): Promise<void> {
     const object = find(id)
     const service = object?.services.find((item) => item.id === serviceId) ?? null
 
@@ -758,7 +825,11 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    updateServices(id, [serviceId], (item) => ({ ...item, workers }))
+    const saved = await patchService(id, serviceId, { workers }, 'Не вдалося зберегти виконавців.')
+
+    if (saved === null) {
+      return
+    }
 
     const wage = workers.reduce((sum, worker) => sum + worker.volume * worker.rate, 0)
 
@@ -772,15 +843,29 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
-  function removeService(id: number, serviceId: number): void {
+  async function removeService(id: number, serviceId: number): Promise<void> {
+    const path = servicesPath(id)
     const object = find(id)
     const service = object?.services.find((item) => item.id === serviceId) ?? null
 
-    if (object === null || service === null) {
+    if (path === null || object === null || service === null) {
       return
     }
 
-    patch(id, { services: object.services.filter((item) => item.id !== serviceId) })
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${serviceId}`))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося прибрати роботу.')
+
+      return
+    }
+
+    applyServices(
+      id,
+      object.services.filter((item) => item.id !== serviceId),
+    )
     log(
       id,
       'service',
@@ -1064,22 +1149,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /** Послуга у вигляді, у якому її поверне бекенд. */
-  function toService(payload: ServicePayload, id: number): Service {
-    return {
-      id,
-      name: payload.name,
-      description: payload.description ?? null,
-      unit: payload.unit,
-      planned_volume: payload.planned_volume,
-      actual_volume: payload.actual_volume ?? null,
-      client_price: payload.client_price ?? null,
-      status: { value: payload.status, label: SERVICE_STATUS_LABELS[payload.status] },
-      workers: payload.workers ?? [],
-    }
-  }
-
-  /** Платіж у вигляді, у якому його поверне бекенд. */
   function toPayment(payload: PaymentPayload, id: number): Payment {
     return {
       id,
@@ -1111,7 +1180,6 @@ export const useObjectsStore = defineStore('objects', () => {
 
       extras.value[created.id] = {
         cover: payload.cover ?? null,
-        services: (payload.services ?? []).map((item, index) => toService(item, index + 1)),
         discount_percent: payload.discount_percent ?? null,
         discount_amount: payload.discount_amount ?? null,
         payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
