@@ -408,6 +408,41 @@ export function hasObjectErrors(errors: ObjectErrors): boolean {
 
 /* ── Запит ─────────────────────────────────────────────────────── */
 
+export type ObjectCore = Omit<
+  ConstructionObject,
+  'services' | 'payments' | 'discount_percent' | 'discount_amount'
+>
+
+export interface ObjectCorePayload {
+  name: string
+  description: string | null
+  address: string
+  client_id: number | null
+  status: ObjectStatus
+  started_at: string | null
+  finished_at: string | null
+  actual_started_at: string | null
+  actual_finished_at: string | null
+  materials?: MaterialPayload[]
+}
+
+export function buildObjectCorePayload(form: ObjectForm): ObjectCorePayload {
+  const description = form.description.trim()
+
+  return {
+    name: form.name.trim(),
+    description: description === '' ? null : description,
+    address: form.address.trim(),
+    client_id: form.clientId,
+    status: form.status,
+    started_at: form.startDate === '' ? null : form.startDate,
+    finished_at: form.endDate === '' ? null : form.endDate,
+    actual_started_at: form.factStartDate === '' ? null : form.factStartDate,
+    actual_finished_at: form.factEndDate === '' ? null : form.factEndDate,
+    ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
+  }
+}
+
 /** Тіло запиту POST /api/v1/workspaces/{id}/objects. */
 export interface ObjectPayload {
   name: string

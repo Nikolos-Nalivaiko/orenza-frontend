@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildObjectCorePayload,
   buildObjectPayload,
   daysBetween,
   emptyObjectForm,
@@ -10,6 +11,7 @@ import {
   type ObjectForm,
 } from '../objects'
 import { emptyPayment } from '../finance'
+import { emptyMaterial } from '../materials'
 
 function makeForm(overrides: Partial<ObjectForm> = {}): ObjectForm {
   return {
@@ -54,6 +56,65 @@ describe('validateObjectForm', () => {
         makeForm({ status: 'done', factStartDate: '2026-09-01', factEndDate: '2026-09-20' }),
       ),
     ).toEqual({})
+  })
+})
+
+describe('buildObjectCorePayload', () => {
+  it('порожнє поле шле як null: тим самим ключем його й стирають', () => {
+    expect(buildObjectCorePayload(makeForm())).toEqual({
+      name: 'ЖК «Пасаж», 3 черга',
+      description: null,
+      address: 'вул. Стеценка, 12 · Київ',
+      client_id: null,
+      status: 'planned',
+      started_at: null,
+      finished_at: null,
+      actual_started_at: null,
+      actual_finished_at: null,
+    })
+  })
+
+  it('позиції їдуть разом з обʼєктом — вони зібрані ще до того, як він зʼявився', () => {
+    const payload = buildObjectCorePayload(
+      makeForm({
+        materials: [
+          {
+            ...emptyMaterial(),
+            name: '  Бетон М300  ',
+            unit: 'м³',
+            quantity: '12,5',
+            costPrice: '3000',
+            clientPrice: '3600',
+          },
+        ],
+      }),
+    )
+
+    expect(payload.materials).toEqual([
+      {
+        name: 'Бетон М300',
+        unit: 'м³',
+        quantity: 12.5,
+        buyer: 'contractor',
+        cost_price: 3000,
+        client_price: 3600,
+        status: 'needed',
+        approved_by_client: false,
+      },
+    ])
+  })
+
+  it('матеріал замовника йде без цін: наших грошей у ньому немає', () => {
+    const payload = buildObjectCorePayload(
+      makeForm({
+        materials: [
+          { ...emptyMaterial(), name: 'Цегла', quantity: '2000', buyer: 'client', costPrice: '9' },
+        ],
+      }),
+    )
+
+    expect(payload.materials?.[0]).not.toHaveProperty('cost_price')
+    expect(payload.materials?.[0]).not.toHaveProperty('client_price')
   })
 })
 

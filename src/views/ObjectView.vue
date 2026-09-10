@@ -65,29 +65,38 @@ onMounted(() => {
   }
 })
 
-function setStatus(status: ObjectStatus): void {
-  objects.setStatus(id.value, status)
+async function setStatus(status: ObjectStatus): Promise<void> {
+  await objects.setStatus(id.value, status)
 }
 
-function toggleArchive(): void {
-  objects.setArchived(id.value, object.value?.archived_at === null)
+async function toggleArchive(): Promise<void> {
+  await objects.setArchived(id.value, object.value?.archived_at === null)
 }
 
 async function remove(): Promise<void> {
-  confirming.value = false
-  objects.remove(id.value)
+  if (!(await objects.remove(id.value))) {
+    confirming.value = false
 
+    return
+  }
+
+  confirming.value = false
   await router.push({ name: 'objects' })
 }
 
-function archiveFromDialog(): void {
+async function archiveFromDialog(): Promise<void> {
   confirming.value = false
-  objects.setArchived(id.value, true)
+  await objects.setArchived(id.value, true)
 }
 </script>
 
 <template>
   <div class="object">
+    <p v-if="objects.error" class="failed" role="alert">
+      <span>{{ objects.error }}</span>
+      <button type="button" class="failed__retry" @click="objects.reset()">Сховати</button>
+    </p>
+
     <p v-if="objects.isLoading" class="loading">Відкриваємо картку…</p>
 
     <!-- Обʼєкта немає: чужий простір, видалений запис або просто друкарка в адресі. -->
@@ -169,6 +178,31 @@ function archiveFromDialog(): void {
   padding: 40px 0;
   font-size: 13.5px;
   color: var(--ink-faint);
+}
+
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failed__retry {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* ── Вкладки ───────────────────────────────────────────────────── */

@@ -14,7 +14,7 @@
 import { parseAmount } from '@/lib/amount'
 import { comparePayments, objectFinance, type Payment } from '@/lib/finance'
 import { daysBetween, type Client, type ClientType, type ConstructionObject } from '@/lib/objects'
-import { isBlankPhone, isCompletePhone } from '@/lib/phone'
+import { formatPhone, isBlankPhone, isCompletePhone } from '@/lib/phone'
 import { isEmail, PHONE_ERROR } from '@/lib/validation'
 
 /* ── Обʼєкти замовника ─────────────────────────────────────────── */
@@ -288,6 +288,21 @@ export interface ClientForm {
 export const CLIENT_TYPE_LABELS: Record<ClientType, string> = {
   person: 'Особа',
   company: 'Компанія',
+}
+
+export const CLIENT_PERSON_LABEL = 'Приватна особа'
+export const CLIENT_CONTACT_BLANK = 'контактну особу не вказано'
+
+export function contactCaption(client: Client): string {
+  return client.type.value === 'company'
+    ? client.contact || CLIENT_CONTACT_BLANK
+    : CLIENT_PERSON_LABEL
+}
+
+export function clientHint(client: Client): string {
+  return client.type.value === 'company'
+    ? client.contact || CLIENT_TYPE_LABELS.company
+    : formatPhone(client.phone)
 }
 
 export function emptyClientForm(type: ClientType = 'person'): ClientForm {

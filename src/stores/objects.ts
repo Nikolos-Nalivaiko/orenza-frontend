@@ -5,7 +5,6 @@ import { useWorkspacesStore } from './workspaces'
 import { formatAmount } from '@/lib/amount'
 import {
   formatPositions,
-  MATERIAL_BUYER_LABELS,
   MATERIAL_STATUS_LABELS,
   type Material,
   type MaterialPayload,
@@ -29,20 +28,17 @@ import {
   type ServiceWorkerPayload,
 } from '@/lib/services'
 import {
+  buildObjectCorePayload,
   buildObjectPayload,
-  demoObjects,
   emptyObjectForm,
   formatDay,
   formatDiscount,
-  isDemoObject,
-  newPublicToken,
   normalizeClient,
-  demoClient,
-  DEMO_OBJECT_ID_FROM,
-  normalizeObject,
   OBJECT_STATUS_LABELS,
+  todayIso,
   type Client,
   type ConstructionObject,
+  type ObjectCore,
   type ObjectDateField,
   type ObjectForm,
   type ObjectStatus,
@@ -52,11 +48,7 @@ import { api, ApiError } from '@/lib/http'
 import { transition, type ActivityKind, type ActivityRecord } from '@/lib/activity'
 import { photosOf, type ObjectPhoto } from '@/lib/photos'
 
-/**
- * Поки ендпоінтів обʼєктів немає, створене живе в localStorage — структура
- * записів і правила ті самі, що поїдуть на бекенд.
- */
-const STORAGE_KEY = 'orenza.objects'
+const EXTRAS_KEY = 'orenza.objects.extras'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
 const ACTIVITY_KEY = 'orenza.objects.activity'
@@ -93,10 +85,6 @@ function write(key: string, value: unknown): boolean {
   }
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 /** Таблиця чи картки — вибір людини, тож переживає перезавантаження. */
 export type ObjectsView = 'table' | 'cards'
 
@@ -108,9 +96,28 @@ function readView(): ObjectsView {
   }
 }
 
-interface StoredObject extends Omit<ConstructionObject, 'client'> {
-  client: Client | null
-  client_id?: number | null
+interface ObjectExtras {
+  cover: string | null
+  services: Service[]
+  discount_percent: number | null
+  discount_amount: number | null
+  payments: Payment[]
+}
+
+function emptyExtras(): ObjectExtras {
+  return {
+    cover: null,
+    services: [],
+    discount_percent: null,
+    discount_amount: null,
+    payments: [],
+  }
+}
+
+function merged(current: Material[], updated: Material[]): Material[] {
+  const byId = new Map(updated.map((item) => [item.id, item]))
+
+  return current.map((item) => byId.get(item.id) ?? item)
 }
 
 export const useObjectsStore = defineStore('objects', () => {
@@ -119,47 +126,53 @@ export const useObjectsStore = defineStore('objects', () => {
 
   const links = ref<Record<number, number | null>>({})
 
-  try {
-    localStorage.removeItem('orenza.clients')
-  } catch {
-    // ignore
+  for (const stale of ['orenza.clients', 'orenza.objects']) {
+    try {
+      localStorage.removeItem(stale)
+    } catch {}
   }
 
-  const items = ref<ConstructionObject[]>(hydrate(readList<StoredObject>(STORAGE_KEY, [])))
+  const extras = ref<Record<number, ObjectExtras>>(readExtras())
+  const items = ref<ConstructionObject[]>([])
   const clients = ref<Client[]>([])
 
+  function readExtras(): Record<number, ObjectExtras> {
+    try {
+      const raw = readStorage(EXTRAS_KEY)
+
+      if (raw === null) {
+        return {}
+      }
+
+      const stored = JSON.parse(raw) as Record<number, Partial<ObjectExtras>>
+      const map: Record<number, ObjectExtras> = {}
+
+      for (const [id, value] of Object.entries(stored)) {
+        map[Number(id)] = { ...emptyExtras(), ...value, cover: null }
+      }
+
+      return map
+    } catch {
+      return {}
+    }
+  }
+
+  function extrasOf(id: number): ObjectExtras {
+    return extras.value[id] ?? emptyExtras()
+  }
+
   function resolveClient(id: number | null): Client | null {
-    if (id === null) {
-      return null
-    }
-
-    return id >= DEMO_OBJECT_ID_FROM
-      ? demoClient(id)
-      : (clients.value.find((item) => item.id === id) ?? null)
+    return id === null ? null : (clients.value.find((item) => item.id === id) ?? null)
   }
 
-  function storedClientId(stored: StoredObject): number | null {
-    if (stored.client_id !== undefined) {
-      return stored.client_id
+  function fromApi(core: ObjectCore): ConstructionObject {
+    links.value[core.id] = core.client?.id ?? null
+
+    return {
+      ...core,
+      client: core.client === null ? null : normalizeClient(core.client),
+      ...extrasOf(core.id),
     }
-
-    const legacy = stored.client?.id ?? null
-
-    if (legacy === null) {
-      return null
-    }
-
-    return legacy < DEMO_OBJECT_ID_FROM ? legacy + DEMO_OBJECT_ID_FROM : legacy
-  }
-
-  function hydrate(stored: StoredObject[]): ConstructionObject[] {
-    return stored.map((item) => {
-      const clientId = storedClientId(item)
-
-      links.value[item.id] = clientId
-
-      return normalizeObject({ ...item, client: resolveClient(clientId) })
-    })
   }
 
   watch(clients, () => {
@@ -202,61 +215,81 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /**
-   * Обкладинки — data-URL на кілька мегабайтів; у сховищі тримати їх немає
-   * сенсу, тож локальний список зберігаємо без них.
-   */
   function persist(): void {
-    write(
-      STORAGE_KEY,
-      items.value.map((item) => ({
-        ...item,
-        cover: null,
-        client: null,
-        client_id: links.value[item.id] ?? null,
-      })),
-    )
+    const map: Record<number, Omit<ObjectExtras, 'cover'>> = {}
+
+    for (const item of items.value) {
+      const kept = {
+        services: item.services,
+        discount_percent: item.discount_percent,
+        discount_amount: item.discount_amount,
+        payments: item.payments,
+      }
+
+      map[item.id] = kept
+      extras.value[item.id] = { cover: item.cover, ...kept }
+    }
+
+    write(EXTRAS_KEY, map)
   }
 
-  /** Стільки ж, скільки й у решті сторів: запит буде тут, дані — уже в формі. */
-  async function fetchObjects(): Promise<void> {
+  function objectsPath(): string | null {
+    const slug = workspaces.current?.slug
+
+    return slug === undefined ? null : `/workspaces/${slug}/objects`
+  }
+
+  async function load(): Promise<void> {
+    const path = objectsPath()
+
+    if (path === null) {
+      isLoading.value = false
+      loaded.value = true
+
+      return
+    }
+
     isLoading.value = true
+    error.value = null
 
     try {
-      // TODO: GET /api/v1/workspaces/{id}/objects
-      await progress.track(delay(460))
+      const list = await progress.track(api.get<ObjectCore[]>(`${path}?archived=1`))
 
-      const raw = readStorage(STORAGE_KEY)
-      const workspaceId = workspaces.current?.id ?? null
-
-      // Демообʼєкти сіються один раз — далі вони звичайні записи, які можна
-      // редагувати, архівувати й видаляти, як і власні.
-      if (raw === null && workspaceId !== null) {
-        items.value = demoObjects(workspaceId)
-
-        for (const object of items.value) {
-          links.value[object.id] = object.client?.id ?? null
-        }
-
-        persist()
-
-        return
-      }
-
-      const stored = readList<StoredObject>(STORAGE_KEY, [])
-
-      items.value = hydrate(stored)
-
-      // Обʼєкт із минулої сесії міг лишитись без публічного токена або копією
-      // замовника всередині: перезаписуємо сховище в новому форматі.
-      if (stored.some((item) => item.public_token === undefined || item.client_id === undefined)) {
-        persist()
-      }
+      items.value = list.map(fromApi)
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося завантажити обʼєкти.')
     } finally {
       isLoading.value = false
       loaded.value = true
     }
   }
+
+  let pending: Promise<void> | null = null
+
+  function fetchObjects(): Promise<void> {
+    pending ??= load().finally(() => {
+      pending = null
+    })
+
+    return pending
+  }
+
+  watch(
+    () => workspaces.currentId,
+    (id) => {
+      items.value = []
+      links.value = {}
+      clients.value = []
+      error.value = null
+      loaded.value = false
+      isLoadingClients.value = true
+
+      if (id !== null) {
+        void fetchObjects()
+        void fetchClients()
+      }
+    },
+  )
 
   function find(id: number): ConstructionObject | null {
     return items.value.find((item) => item.id === id) ?? null
@@ -270,25 +303,42 @@ export const useObjectsStore = defineStore('objects', () => {
     return items.value.find((item) => item.public_token === token) ?? null
   }
 
-  /** Завантаження для гостя: сторінку відкривають без входу й без простору. */
   async function fetchTrack(): Promise<void> {
-    isLoading.value = true
-
-    try {
-      // TODO: GET /api/v1/track/{token} — окремий публічний ендпоінт.
-      await progress.track(delay(320))
-
-      items.value = hydrate(readList<StoredObject>(STORAGE_KEY, []))
-    } finally {
-      isLoading.value = false
-      loaded.value = true
-    }
+    isLoading.value = false
+    loaded.value = true
   }
 
-  /** Точкова правка обʼєкта зі списку: статус, готовність, архів. */
   function patch(id: number, changes: Partial<ConstructionObject>): void {
     items.value = items.value.map((item) => (item.id === id ? { ...item, ...changes } : item))
     persist()
+  }
+
+  function apply(next: ConstructionObject): void {
+    items.value = items.value.map((item) => (item.id === next.id ? next : item))
+  }
+
+  async function sync(
+    id: number,
+    changes: Record<string, unknown>,
+    fallback: string,
+  ): Promise<void> {
+    const path = objectsPath()
+    const before = find(id)
+
+    if (path === null || before === null) {
+      return
+    }
+
+    error.value = null
+
+    try {
+      const updated = await progress.track(api.patch<ObjectCore>(`${path}/${id}`, changes))
+
+      apply(fromApi(updated))
+    } catch (cause) {
+      apply(before)
+      error.value = clientError(cause, fallback)
+    }
   }
 
   /* ── Стрічка подій ───────────────────────────────────────────── */
@@ -362,27 +412,43 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /* ── Точкові правки картки ───────────────────────────────────── */
 
-  function setStatus(id: number, value: ObjectStatus): void {
+  async function setStatus(id: number, value: ObjectStatus): Promise<void> {
     const object = find(id)
 
-    patch(id, { status: { value, label: OBJECT_STATUS_LABELS[value] } })
-
-    if (object !== null && object.status.value !== value) {
-      log(
-        id,
-        'status',
-        'Змінено статус',
-        transition(object.status.label, OBJECT_STATUS_LABELS[value]),
-      )
+    if (object === null || object.status.value === value) {
+      return
     }
+
+    const changes: Record<string, unknown> = { status: value }
+    const today = todayIso()
+
+    if ((value === 'in_progress' || value === 'done') && object.actual_started_at === null) {
+      changes.actual_started_at = today
+    }
+
+    if (value === 'done' && object.actual_finished_at === null) {
+      changes.actual_finished_at = today
+    }
+
+    patch(id, { status: { value, label: OBJECT_STATUS_LABELS[value] } })
+    log(
+      id,
+      'status',
+      'Змінено статус',
+      transition(object.status.label, OBJECT_STATUS_LABELS[value]),
+    )
+
+    await sync(id, changes, 'Не вдалося змінити статус.')
   }
 
-  function setArchived(id: number, archived: boolean): void {
+  async function setArchived(id: number, archived: boolean): Promise<void> {
     patch(id, { archived_at: archived ? new Date().toISOString() : null })
     log(id, 'object', archived ? 'Обʼєкт в архіві' : 'Обʼєкт повернуто з архіву')
+
+    await sync(id, { archived }, 'Не вдалося змінити архів.')
   }
 
-  function setDescription(id: number, value: string): void {
+  async function setDescription(id: number, value: string): Promise<void> {
     const object = find(id)
     const next = value.trim() === '' ? null : value.trim()
 
@@ -392,6 +458,8 @@ export const useObjectsStore = defineStore('objects', () => {
 
     patch(id, { description: next })
     log(id, 'object', next === null ? 'Опис прибрано' : 'Оновлено опис')
+
+    await sync(id, { description: next }, 'Не вдалося зберегти опис.')
   }
 
   /**
@@ -399,7 +467,7 @@ export const useObjectsStore = defineStore('objects', () => {
    * окремим записом. Фактичні самі по собі події стрічки: вони приїдуть туди
    * з обʼєкта, і другий запис був би дублем.
    */
-  function setDate(id: number, field: ObjectDateField, value: string): void {
+  async function setDate(id: number, field: ObjectDateField, value: string): Promise<void> {
     const object = find(id)
     const next = value === '' ? null : value
 
@@ -417,6 +485,8 @@ export const useObjectsStore = defineStore('objects', () => {
         transition(formatDay(object[field] ?? ''), formatDay(next ?? '')),
       )
     }
+
+    await sync(id, { [field]: next }, 'Не вдалося зберегти дату.')
   }
 
   /** Знижку зберігаємо так, як її ввели: відсотком або сумою, не обома. */
@@ -444,38 +514,38 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /* ── Матеріали обʼєкта ───────────────────────────────────────── */
 
+  function materialsPath(id: number): string | null {
+    const path = objectsPath()
+
+    return path === null ? null : `${path}/${id}/materials`
+  }
+
+  function applyMaterials(id: number, materials: Material[]): void {
+    patch(id, { materials })
+  }
+
   /**
    * Поява матеріалу в журнал не пишеться: стрічка виводить її з самого
    * обʼєкта (див. lib/activity). А от рух по стадіях і зникнення позиції з
    * даних не відновити — їх фіксуємо.
    */
-  function addMaterial(id: number, payload: MaterialPayload): void {
+  async function addMaterial(id: number, payload: MaterialPayload): Promise<void> {
+    const path = materialsPath(id)
     const object = find(id)
 
-    if (object === null) {
+    if (path === null || object === null) {
       return
     }
 
-    patch(id, { materials: [...object.materials, toMaterial(payload, nextId(object.materials))] })
-  }
+    error.value = null
 
-  /** Спільна правка позицій; поштучна зміна — той самий шлях зі списку з одного. */
-  function updateMaterials(
-    id: number,
-    materialIds: number[],
-    change: (material: Material) => Material,
-  ): void {
-    const object = find(id)
+    try {
+      const created = await progress.track(api.post<Material>(path, payload))
 
-    if (object === null) {
-      return
+      applyMaterials(id, [...object.materials, created])
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося додати матеріал.')
     }
-
-    patch(id, {
-      materials: object.materials.map((item) =>
-        materialIds.includes(item.id) ? change(item) : item,
-      ),
-    })
   }
 
   /**
@@ -483,10 +553,15 @@ export const useObjectsStore = defineStore('objects', () => {
    * які вже стоять у цьому статусі, не рахуються зміненими: вони не мають
    * потрапляти ні в стрічку, ні в підпис «оновлено N позицій».
    */
-  function setMaterialStatus(id: number, materialIds: number[], value: MaterialStatus): void {
+  async function setMaterialStatus(
+    id: number,
+    materialIds: number[],
+    value: MaterialStatus,
+  ): Promise<void> {
+    const path = materialsPath(id)
     const object = find(id)
 
-    if (object === null) {
+    if (path === null || object === null) {
       return
     }
 
@@ -498,9 +573,21 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    const label = MATERIAL_STATUS_LABELS[value]
+    error.value = null
 
-    updateMaterials(id, materialIds, (item) => ({ ...item, status: { value, label } }))
+    try {
+      const updated = await progress.track(
+        api.patch<Material[]>(`${path}/status`, { ids: materialIds, status: value }),
+      )
+
+      applyMaterials(id, merged(object.materials, updated))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося змінити статус матеріалів.')
+
+      return
+    }
+
+    const label = MATERIAL_STATUS_LABELS[value]
 
     // Одна позиція — видно, звідки й куди вона пішла; десяток з однієї
     // поставки йде одним записом, інакше стрічка стає журналом складу.
@@ -517,19 +604,54 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Погодження замовником — прапорець, який ставлять і знімають на ходу. */
-  function setMaterialApproved(id: number, materialId: number, approved: boolean): void {
-    updateMaterials(id, [materialId], (item) => ({ ...item, approved_by_client: approved }))
-  }
-
-  function removeMaterial(id: number, materialId: number): void {
+  async function setMaterialApproved(
+    id: number,
+    materialId: number,
+    approved: boolean,
+  ): Promise<void> {
+    const path = materialsPath(id)
     const object = find(id)
-    const material = object?.materials.find((item) => item.id === materialId) ?? null
 
-    if (object === null || material === null) {
+    if (path === null || object === null) {
       return
     }
 
-    patch(id, { materials: object.materials.filter((item) => item.id !== materialId) })
+    error.value = null
+
+    try {
+      const updated = await progress.track(
+        api.patch<Material>(`${path}/${materialId}`, { approved_by_client: approved }),
+      )
+
+      applyMaterials(id, merged(object.materials, [updated]))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося зберегти погодження.')
+    }
+  }
+
+  async function removeMaterial(id: number, materialId: number): Promise<void> {
+    const path = materialsPath(id)
+    const object = find(id)
+    const material = object?.materials.find((item) => item.id === materialId) ?? null
+
+    if (path === null || object === null || material === null) {
+      return
+    }
+
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${materialId}`))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося прибрати матеріал.')
+
+      return
+    }
+
+    applyMaterials(
+      id,
+      object.materials.filter((item) => item.id !== materialId),
+    )
     log(
       id,
       'material',
@@ -788,16 +910,35 @@ export const useObjectsStore = defineStore('objects', () => {
     log(id, 'payment', 'Прибрано платіж', `${formatAmount(payment.amount)} ₴`)
   }
 
-  function remove(id: number): void {
+  async function remove(id: number): Promise<boolean> {
+    const path = objectsPath()
+
+    if (path === null) {
+      return false
+    }
+
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${id}`))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося видалити обʼєкт.')
+
+      return false
+    }
+
     items.value = items.value.filter((item) => item.id !== id)
-    persist()
 
     // Разом з обʼєктом їде і все, що до нього кріпилось.
+    delete extras.value[id]
     activity.value = activity.value.filter((record) => record.object_id !== id)
     photos.value = photos.value.filter((photo) => photo.object_id !== id)
 
+    persist()
     write(ACTIVITY_KEY, activity.value)
     write(PHOTOS_KEY, photos.value)
+
+    return true
   }
 
   function reset(): void {
@@ -923,21 +1064,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /** Позиція матеріалу у вигляді, у якому її поверне бекенд. */
-  function toMaterial(payload: MaterialPayload, id: number): Material {
-    return {
-      id,
-      name: payload.name,
-      unit: payload.unit,
-      quantity: payload.quantity,
-      buyer: { value: payload.buyer, label: MATERIAL_BUYER_LABELS[payload.buyer] },
-      cost_price: payload.cost_price ?? null,
-      client_price: payload.client_price ?? null,
-      status: { value: payload.status, label: MATERIAL_STATUS_LABELS[payload.status] },
-      approved_by_client: payload.approved_by_client,
-    }
-  }
-
   /** Послуга у вигляді, у якому її поверне бекенд. */
   function toService(payload: ServicePayload, id: number): Service {
     return {
@@ -967,58 +1093,45 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   async function create(form: ObjectForm): Promise<ConstructionObject | null> {
-    const payload = buildObjectPayload(form)
+    const path = objectsPath()
 
-    isSaving.value = true
-    error.value = null
-
-    try {
-      // TODO: POST /api/v1/workspaces/{id}/objects
-      await progress.track(delay(760))
-    } finally {
-      isSaving.value = false
-    }
-
-    const workspaceId = workspaces.current?.id ?? null
-
-    if (workspaceId === null) {
+    if (path === null) {
       error.value = 'Спочатку оберіть робочий простір.'
 
       return null
     }
 
-    const own = items.value.filter((item) => !isDemoObject(item.id))
+    isSaving.value = true
+    error.value = null
 
-    const object: ConstructionObject = {
-      id: Math.max(0, ...own.map((item) => item.id)) + 1,
-      workspace_id: workspaceId,
-      name: payload.name,
-      description: payload.description ?? null,
-      address: payload.address,
-      client: resolveClient(form.clientId),
-      status: { value: payload.status, label: OBJECT_STATUS_LABELS[payload.status] },
-      started_at: payload.started_at ?? null,
-      finished_at: payload.finished_at ?? null,
-      actual_started_at: payload.actual_started_at ?? null,
-      actual_finished_at: payload.actual_finished_at ?? null,
-      cover: payload.cover ?? null,
-      materials: (payload.materials ?? []).map((item, index) => toMaterial(item, index + 1)),
-      services: (payload.services ?? []).map((item, index) => toService(item, index + 1)),
-      discount_percent: payload.discount_percent ?? null,
-      discount_amount: payload.discount_amount ?? null,
-      payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: new Date().toISOString(),
+    try {
+      const created = await progress.track(api.post<ObjectCore>(path, buildObjectCorePayload(form)))
+
+      const payload = buildObjectPayload(form)
+
+      extras.value[created.id] = {
+        cover: payload.cover ?? null,
+        services: (payload.services ?? []).map((item, index) => toService(item, index + 1)),
+        discount_percent: payload.discount_percent ?? null,
+        discount_amount: payload.discount_amount ?? null,
+        payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
+      }
+
+      const object = fromApi(created)
+
+      items.value = [...items.value, object]
+
+      persist()
+      clearDraft()
+
+      return object
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося створити обʼєкт.')
+
+      return null
+    } finally {
+      isSaving.value = false
     }
-
-    items.value = [...items.value, object]
-    links.value[object.id] = form.clientId
-
-    persist()
-    clearDraft()
-
-    return object
   }
 
   /* ── Чернетка форми ──────────────────────────────────────────── */

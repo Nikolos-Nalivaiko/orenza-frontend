@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { useDismissable } from '@/composables/useDismissable'
+import { clientHint, contactCaption } from '@/lib/clients'
 import type { Client } from '@/lib/objects'
 import { monogram } from '@/lib/workspaces'
 import { formatPhone } from '@/lib/phone'
@@ -29,6 +30,8 @@ const active = ref(0)
 useDismissable(root, open)
 
 const selected = computed(() => props.clients.find((client) => client.id === model.value) ?? null)
+
+const isCompany = computed(() => selected.value?.type.value === 'company')
 
 const matches = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -157,15 +160,18 @@ function onKeydown(event: KeyboardEvent): void {
         </span>
       </div>
 
-      <!-- Контакт і телефон підписані: в один рядок через крапку вони зливались. -->
       <dl class="picked__facts">
-        <div>
-          <dt>Контакт</dt>
-          <dd>{{ selected.contact }}</dd>
+        <div v-if="isCompany">
+          <dt>Контактна особа</dt>
+          <dd :class="{ picked__none: !selected.contact }">{{ contactCaption(selected) }}</dd>
         </div>
         <div v-if="selected.phone">
           <dt>Телефон</dt>
           <dd class="picked__phone">{{ formatPhone(selected.phone) }}</dd>
+        </div>
+        <div v-if="!isCompany && selected.email">
+          <dt>Пошта</dt>
+          <dd>{{ selected.email }}</dd>
         </div>
       </dl>
     </div>
@@ -215,7 +221,7 @@ function onKeydown(event: KeyboardEvent): void {
 
               <span class="opt__body">
                 <span class="opt__name">{{ client.name }}</span>
-                <span class="opt__meta">{{ client.contact }}</span>
+                <span v-if="clientHint(client)" class="opt__meta">{{ clientHint(client) }}</span>
               </span>
 
               <!-- Персональну знижку видно ще до вибору: вона поїде в обʼєкт. -->
@@ -414,6 +420,11 @@ function onKeydown(event: KeyboardEvent): void {
 
 .picked__phone {
   font-variant-numeric: tabular-nums;
+}
+
+.picked__none {
+  font-weight: 500;
+  color: var(--ink-faint);
 }
 
 .picked__disc {

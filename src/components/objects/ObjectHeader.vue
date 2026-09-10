@@ -6,6 +6,7 @@ import ObjectShare from '@/components/objects/ObjectShare.vue'
 import ObjectStatusMenu from '@/components/objects/ObjectStatusMenu.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
+import { contactCaption } from '@/lib/clients'
 import { daysBetween, formatDay, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
 import { formatDeadline, servicesDone, type ObjectSummary } from '@/lib/objectList'
 import { monogram } from '@/lib/workspaces'
@@ -173,9 +174,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
               >
                 {{ object.client.name }}
               </RouterLink>
-              <span class="client__contact">{{
-                object.client.contact || 'контакт не вказано'
-              }}</span>
+              <span class="client__contact">{{ contactCaption(object.client) }}</span>
             </span>
           </div>
 

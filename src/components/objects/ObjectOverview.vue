@@ -32,12 +32,12 @@ const entries = computed(() =>
   objectActivity(props.object, objects.activityOf(props.object.id), photos.value),
 )
 
-function setDescription(value: string): void {
-  objects.setDescription(props.object.id, value)
+async function setDescription(value: string): Promise<void> {
+  await objects.setDescription(props.object.id, value)
 }
 
-function setDate(field: ObjectDateField, value: string): void {
-  objects.setDate(props.object.id, field, value)
+async function setDate(field: ObjectDateField, value: string): Promise<void> {
+  await objects.setDate(props.object.id, field, value)
 }
 
 function setDiscount(percent: number | null, amount: number | null): void {

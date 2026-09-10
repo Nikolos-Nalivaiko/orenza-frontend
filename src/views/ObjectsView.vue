@@ -77,6 +77,11 @@ function reset(): void {
       </RouterLink>
     </header>
 
+    <p v-if="objects.error" class="failed" role="alert">
+      <span>{{ objects.error }}</span>
+      <button type="button" class="failed__retry" @click="objects.fetchObjects()">Оновити</button>
+    </p>
+
     <ObjectsToolbar
       v-if="state !== 'blank'"
       v-model="filters"
@@ -146,6 +151,31 @@ function reset(): void {
 </template>
 
 <style scoped>
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failed__retry {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .objects {
   display: grid;
   gap: 18px;

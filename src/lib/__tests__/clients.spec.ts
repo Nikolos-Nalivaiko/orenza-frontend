@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CLIENT_CONTACT_BLANK,
+  CLIENT_PERSON_LABEL,
   CLIENT_PHONE_REQUIRED,
+  clientHint,
   clientObjects,
   clientPayments,
   clientProfile,
   clientTotals,
+  contactCaption,
   formatObjects,
   formatSpell,
   isRegularClient,
@@ -251,6 +255,33 @@ describe('clientProfile', () => {
     expect(formatSpell(11)).toBe('11 днів')
     expect(formatSpell(90)).toBe('3 місяці')
     expect(formatSpell(730)).toBe('2 роки')
+  })
+})
+
+describe('підпис під імʼям', () => {
+  const person: Client = {
+    ...CLIENT,
+    id: 2,
+    type: { value: 'person', label: 'Особа' },
+    name: 'Олександр Романюк',
+    contact: '',
+    phone: '+380671234567',
+  }
+
+  it('у компанії це контактна особа, у людини — те, що вона людина', () => {
+    expect(contactCaption(CLIENT)).toBe('Ірина Ковальчук')
+    expect(contactCaption(person)).toBe(CLIENT_PERSON_LABEL)
+  })
+
+  it('компанії без контактної особи кажемо про це прямо', () => {
+    expect(contactCaption({ ...CLIENT, contact: '' })).toBe(CLIENT_CONTACT_BLANK)
+  })
+
+  it('у списку людину впізнають за номером, а не за порожнім рядком', () => {
+    expect(clientHint(person)).toBe('+380 67 123 45 67')
+    expect(clientHint({ ...person, phone: '' })).toBe('')
+    expect(clientHint(CLIENT)).toBe('Ірина Ковальчук')
+    expect(clientHint({ ...CLIENT, contact: '' })).toBe('Компанія')
   })
 })
 

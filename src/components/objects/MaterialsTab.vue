@@ -59,25 +59,27 @@ function pickAll(on: boolean): void {
   selected.value = on ? rows.value.map((row) => row.id) : []
 }
 
-function setStatus(id: number, status: MaterialStatus): void {
-  objects.setMaterialStatus(props.object.id, [id], status)
+async function setStatus(id: number, status: MaterialStatus): Promise<void> {
+  await objects.setMaterialStatus(props.object.id, [id], status)
 }
 
-function setStatusForSelected(status: MaterialStatus): void {
-  objects.setMaterialStatus(props.object.id, selected.value, status)
+async function setStatusForSelected(status: MaterialStatus): Promise<void> {
+  const ids = selected.value
+
   selected.value = []
+  await objects.setMaterialStatus(props.object.id, ids, status)
 }
 
-function approve(id: number, on: boolean): void {
-  objects.setMaterialApproved(props.object.id, id, on)
+async function approve(id: number, on: boolean): Promise<void> {
+  await objects.setMaterialApproved(props.object.id, id, on)
 }
 
-function remove(id: number): void {
-  objects.removeMaterial(props.object.id, id)
+async function remove(id: number): Promise<void> {
+  await objects.removeMaterial(props.object.id, id)
 }
 
-function add(payload: MaterialPayload): void {
-  objects.addMaterial(props.object.id, payload)
+async function add(payload: MaterialPayload): Promise<void> {
+  await objects.addMaterial(props.object.id, payload)
 }
 </script>
 
