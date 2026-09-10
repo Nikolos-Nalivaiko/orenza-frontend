@@ -108,12 +108,14 @@ function pick(id: number): void {
   payTo.value = id
 }
 
-function savePayment(payload: PaymentPayload): void {
-  if (payTo.value !== null) {
-    objects.addPayment(payTo.value, payload)
-  }
+async function savePayment(payload: PaymentPayload): Promise<void> {
+  const id = payTo.value
 
   payTo.value = null
+
+  if (id !== null) {
+    await objects.addPayment(id, payload)
+  }
 }
 </script>
 

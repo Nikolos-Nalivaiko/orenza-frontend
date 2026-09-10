@@ -98,18 +98,10 @@ function readView(): ObjectsView {
 
 interface ObjectExtras {
   cover: string | null
-  discount_percent: number | null
-  discount_amount: number | null
-  payments: Payment[]
 }
 
 function emptyExtras(): ObjectExtras {
-  return {
-    cover: null,
-    discount_percent: null,
-    discount_amount: null,
-    payments: [],
-  }
+  return { cover: null }
 }
 
 function merged(current: Material[], updated: Material[]): Material[] {
@@ -135,24 +127,7 @@ export const useObjectsStore = defineStore('objects', () => {
   const clients = ref<Client[]>([])
 
   function readExtras(): Record<number, ObjectExtras> {
-    try {
-      const raw = readStorage(EXTRAS_KEY)
-
-      if (raw === null) {
-        return {}
-      }
-
-      const stored = JSON.parse(raw) as Record<number, Partial<ObjectExtras>>
-      const map: Record<number, ObjectExtras> = {}
-
-      for (const [id, value] of Object.entries(stored)) {
-        map[Number(id)] = { ...emptyExtras(), ...value, cover: null }
-      }
-
-      return map
-    } catch {
-      return {}
-    }
+    return {}
   }
 
   function extrasOf(id: number): ObjectExtras {
@@ -487,7 +462,11 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Знижку зберігаємо так, як її ввели: відсотком або сумою, не обома. */
-  function setDiscount(id: number, percent: number | null, amount: number | null): void {
+  async function setDiscount(
+    id: number,
+    percent: number | null,
+    amount: number | null,
+  ): Promise<void> {
     const object = find(id)
 
     if (
@@ -506,6 +485,12 @@ export const useObjectsStore = defineStore('objects', () => {
         formatDiscount(object.discount_percent, object.discount_amount),
         formatDiscount(percent, amount),
       ),
+    )
+
+    await sync(
+      id,
+      { discount_percent: percent, discount_amount: amount },
+      'Не вдалося зберегти знижку.',
     )
   }
 
@@ -876,24 +861,69 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /* ── Платежі обʼєкта ─────────────────────────────────────────── */
 
+  function paymentsPath(id: number): string | null {
+    const path = objectsPath()
+
+    return path === null ? null : `${path}/${id}/payments`
+  }
+
   /**
    * Гроші замовника: і те, що вже прийшло, і те, чого ще чекаємо. Кожен рух
    * тут — подія, за якою потім звіряються, тож у стрічку йде все.
    */
-  function addPayment(id: number, payload: PaymentPayload): void {
+  async function addPayment(id: number, payload: PaymentPayload): Promise<void> {
+    const path = paymentsPath(id)
     const object = find(id)
 
-    if (object === null) {
+    if (path === null || object === null) {
       return
     }
 
-    patch(id, { payments: [...object.payments, toPayment(payload, nextId(object.payments))] })
-    log(
-      id,
-      'payment',
-      payload.status === 'paid' ? 'Отримано платіж' : 'Заплановано платіж',
-      `${formatAmount(payload.amount)} ₴${payload.paid_at === undefined ? '' : `, ${formatDay(payload.paid_at)}`}`,
-    )
+    error.value = null
+
+    try {
+      const created = await progress.track(api.post<Payment>(path, payload))
+
+      patch(id, { payments: [...object.payments, created] })
+      log(
+        id,
+        'payment',
+        created.status.value === 'paid' ? 'Отримано платіж' : 'Заплановано платіж',
+        `${formatAmount(created.amount)} ₴${created.paid_at === null ? '' : `, ${formatDay(created.paid_at)}`}`,
+      )
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося додати платіж.')
+    }
+  }
+
+  async function savePayment(
+    id: number,
+    paymentId: number,
+    changes: Record<string, unknown>,
+    fallback: string,
+  ): Promise<Payment | null> {
+    const path = paymentsPath(id)
+    const object = find(id)
+
+    if (path === null || object === null) {
+      return null
+    }
+
+    error.value = null
+
+    try {
+      const updated = await progress.track(api.patch<Payment>(`${path}/${paymentId}`, changes))
+
+      patch(id, {
+        payments: object.payments.map((item) => (item.id === paymentId ? updated : item)),
+      })
+
+      return updated
+    } catch (cause) {
+      error.value = clientError(cause, fallback)
+
+      return null
+    }
   }
 
   /**
@@ -903,26 +933,23 @@ export const useObjectsStore = defineStore('objects', () => {
    * є: тут його не показують, тож і затирати його порожнім значенням нема за
    * чим.
    */
-  function updatePayment(id: number, paymentId: number, payload: PaymentPayload): void {
+  async function updatePayment(
+    id: number,
+    paymentId: number,
+    payload: PaymentPayload,
+  ): Promise<void> {
     const object = find(id)
     const before = object?.payments.find((item) => item.id === paymentId) ?? null
 
-    if (object === null || before === null) {
+    if (before === null) {
       return
     }
 
-    const after: Payment = {
-      ...before,
-      name: payload.name,
-      amount: payload.amount,
-      status: { value: payload.status, label: PAYMENT_STATUS_LABELS[payload.status] },
-      paid_at: payload.paid_at ?? null,
-      client_visible: payload.client_visible ?? false,
-    }
+    const after = await savePayment(id, paymentId, { ...payload }, 'Не вдалося зберегти платіж.')
 
-    patch(id, {
-      payments: object.payments.map((item) => (item.id === paymentId ? after : item)),
-    })
+    if (after === null) {
+      return
+    }
 
     // У стрічку йде та зміна, заради якої платіж і відкривали: спочатку
     // гроші, потім стан, і лише потім — підпис.
@@ -952,28 +979,30 @@ export const useObjectsStore = defineStore('objects', () => {
   }
 
   /** Гроші прийшли — платіж із очікуваного стає отриманим, і навпаки. */
-  function setPaymentStatus(
+  async function setPaymentStatus(
     id: number,
     paymentId: number,
     value: PaymentStatus,
     date?: string,
-  ): void {
+  ): Promise<void> {
     const object = find(id)
     const payment = object?.payments.find((item) => item.id === paymentId) ?? null
 
-    if (object === null || payment === null || payment.status.value === value) {
+    if (payment === null || payment.status.value === value) {
       return
     }
 
-    const paidAt = value === 'paid' ? (payment.paid_at ?? date ?? null) : payment.paid_at
+    const changes: Record<string, unknown> = { status: value }
 
-    patch(id, {
-      payments: object.payments.map((item) =>
-        item.id === paymentId
-          ? { ...item, status: { value, label: PAYMENT_STATUS_LABELS[value] }, paid_at: paidAt }
-          : item,
-      ),
-    })
+    if (value === 'paid' && payment.paid_at === null && date !== undefined) {
+      changes.paid_at = date
+    }
+
+    const saved = await savePayment(id, paymentId, changes, 'Не вдалося змінити статус платежу.')
+
+    if (saved === null) {
+      return
+    }
 
     log(
       id,
@@ -983,11 +1012,22 @@ export const useObjectsStore = defineStore('objects', () => {
     )
   }
 
-  function removePayment(id: number, paymentId: number): void {
+  async function removePayment(id: number, paymentId: number): Promise<void> {
+    const path = paymentsPath(id)
     const object = find(id)
     const payment = object?.payments.find((item) => item.id === paymentId) ?? null
 
-    if (object === null || payment === null) {
+    if (path === null || object === null || payment === null) {
+      return
+    }
+
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${paymentId}`))
+    } catch (cause) {
+      error.value = clientError(cause, 'Не вдалося прибрати платіж.')
+
       return
     }
 
@@ -1149,18 +1189,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  function toPayment(payload: PaymentPayload, id: number): Payment {
-    return {
-      id,
-      name: payload.name,
-      description: payload.description ?? null,
-      amount: payload.amount,
-      status: { value: payload.status, label: PAYMENT_STATUS_LABELS[payload.status] },
-      paid_at: payload.paid_at ?? null,
-      client_visible: payload.client_visible ?? false,
-    }
-  }
-
   async function create(form: ObjectForm): Promise<ConstructionObject | null> {
     const path = objectsPath()
 
@@ -1178,12 +1206,7 @@ export const useObjectsStore = defineStore('objects', () => {
 
       const payload = buildObjectPayload(form)
 
-      extras.value[created.id] = {
-        cover: payload.cover ?? null,
-        discount_percent: payload.discount_percent ?? null,
-        discount_amount: payload.discount_amount ?? null,
-        payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
-      }
+      extras.value[created.id] = { cover: payload.cover ?? null }
 
       const object = fromApi(created)
 

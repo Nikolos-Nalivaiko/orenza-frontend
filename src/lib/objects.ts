@@ -408,10 +408,7 @@ export function hasObjectErrors(errors: ObjectErrors): boolean {
 
 /* ── Запит ─────────────────────────────────────────────────────── */
 
-export type ObjectCore = Omit<
-  ConstructionObject,
-  'payments' | 'discount_percent' | 'discount_amount'
->
+export type ObjectCore = Omit<ConstructionObject, 'cover'>
 
 export interface ObjectCorePayload {
   name: string
@@ -441,7 +438,23 @@ export function buildObjectCorePayload(form: ObjectForm): ObjectCorePayload {
     actual_finished_at: form.factEndDate === '' ? null : form.factEndDate,
     ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
     ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
+    ...(form.payments.length === 0 ? {} : { payments: form.payments.map(buildPaymentPayload) }),
+    ...discountPayload(form.discount),
   }
+}
+
+function discountPayload(discount: DiscountForm): {
+  discount_percent?: number
+  discount_amount?: number
+} {
+  const parsed = parseAmount(discount.value)
+  const off = parsed === null || parsed <= 0 ? null : parsed
+
+  if (off === null) {
+    return {}
+  }
+
+  return discount.kind === 'percent' ? { discount_percent: off } : { discount_amount: off }
 }
 
 /** Тіло запиту POST /api/v1/workspaces/{id}/objects. */

@@ -40,8 +40,8 @@ async function setDate(field: ObjectDateField, value: string): Promise<void> {
   await objects.setDate(props.object.id, field, value)
 }
 
-function setDiscount(percent: number | null, amount: number | null): void {
-  objects.setDiscount(props.object.id, percent, amount)
+async function setDiscount(percent: number | null, amount: number | null): Promise<void> {
+  await objects.setDiscount(props.object.id, percent, amount)
 }
 
 function addNote(text: string): void {

@@ -43,14 +43,16 @@ const discountLabel = computed(() => {
   return label === '' ? '' : `−${label}`
 })
 
-function save(payload: PaymentPayload): void {
-  if (editingId.value === null) {
-    objects.addPayment(props.object.id, payload)
+async function save(payload: PaymentPayload): Promise<void> {
+  const id = editingId.value
+
+  if (id === null) {
+    await objects.addPayment(props.object.id, payload)
 
     return
   }
 
-  objects.updatePayment(props.object.id, editingId.value, payload)
+  await objects.updatePayment(props.object.id, id, payload)
 }
 
 function close(): void {
@@ -59,12 +61,12 @@ function close(): void {
 }
 
 /** Гроші прийшли: дату надходження ставимо сьогоднішню, якщо її ще не було. */
-function receive(paymentId: number): void {
-  objects.setPaymentStatus(props.object.id, paymentId, 'paid', props.today)
+async function receive(paymentId: number): Promise<void> {
+  await objects.setPaymentStatus(props.object.id, paymentId, 'paid', props.today)
 }
 
-function remove(paymentId: number): void {
-  objects.removePayment(props.object.id, paymentId)
+async function remove(paymentId: number): Promise<void> {
+  await objects.removePayment(props.object.id, paymentId)
 }
 </script>
 
