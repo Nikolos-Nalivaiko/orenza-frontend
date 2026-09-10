@@ -7,16 +7,9 @@ import { formatActive } from '@/lib/clients'
 import type { ClientRow } from '@/lib/clientList'
 import { formatPhone } from '@/lib/phone'
 
-/**
- * Замовники таблицею. Картки тут були б хизуванням: у замовника немає ні
- * обкладинки, ні статусу — є контакти й цифри, а їх порівнюють по колонках.
- *
- * Рядок клікабельний увесь, але посилання в ньому два: імʼя веде в картку, а
- * телефон одразу набирає номер — саме заради нього в список і заходять, коли
- * треба комусь нагадати про оплату.
- */
-
 defineProps<{ rows: ClientRow[]; today: string }>()
+
+const emit = defineEmits<{ remove: [row: ClientRow] }>()
 </script>
 
 <template>
@@ -28,6 +21,7 @@ defineProps<{ rows: ClientRow[]; today: string }>()
       <span class="chead__num">До сплати</span>
       <span class="chead__num">Знижка</span>
       <span>Активність</span>
+      <span></span>
     </div>
 
     <ul class="crows">
@@ -65,7 +59,6 @@ defineProps<{ rows: ClientRow[]; today: string }>()
           </p>
         </div>
 
-        <!-- Головна цифра списку: одразу видно, з ким вирішувати питання оплати. -->
         <div class="cell cell--num" data-label="До сплати">
           <p
             class="crow__value crow__value--money"
@@ -99,6 +92,17 @@ defineProps<{ rows: ClientRow[]; today: string }>()
           </p>
           <p class="crow__sub">{{ last ? last.text : 'руху ще не було' }}</p>
         </div>
+
+        <div class="cell cell--drop">
+          <button
+            type="button"
+            class="ctl-drop"
+            :aria-label="`Видалити замовника «${client.name}»`"
+            @click="emit('remove', { client, totals, regular, last })"
+          >
+            <AppIcon name="trash" />
+          </button>
+        </div>
       </li>
     </ul>
   </div>
@@ -106,20 +110,10 @@ defineProps<{ rows: ClientRow[]; today: string }>()
 
 <style scoped>
 .ctable {
-  /* Ширина таблиці залежить від колонки: бічну панель можна згорнути. */
   container-type: inline-size;
 
-  --cols: minmax(180px, 2.4fr) 152px 96px 152px 88px minmax(150px, 1.5fr);
-
-  /* Один рядок значення на всі колонки: інакше перші рядки клітинок стоять
-     на різній висоті через різні кеглі. */
+  --cols: minmax(180px, 1fr) 152px 96px 152px 88px 150px 28px;
   --row-line: 20px;
-
-  /*
-   * Проміжок між колонками широкий саме через праву половину таблиці: сума,
-   * знижка й дата стоять одна за одною, всі притиснуті до свого краю, і на
-   * тісному кроці вони читаються як одне довге число.
-   */
   --col-gap: 24px;
 
   display: grid;
@@ -185,6 +179,31 @@ defineProps<{ rows: ClientRow[]; today: string }>()
 .cell--num {
   justify-items: end;
   text-align: right;
+}
+
+.cell--drop {
+  position: relative;
+  z-index: 1;
+  justify-items: center;
+}
+
+.cell--drop .ctl-drop {
+  opacity: 0;
+  transition:
+    opacity 0.16s var(--ease),
+    background-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+}
+
+.crow:hover .ctl-drop,
+.cell--drop .ctl-drop:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .cell--drop .ctl-drop {
+    opacity: 1;
+  }
 }
 
 .crow__title {
@@ -343,7 +362,21 @@ defineProps<{ rows: ClientRow[]; today: string }>()
     text-align: left;
   }
 
-  .cell:not(.cell--name)::before {
+  .cell--drop {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+  }
+
+  .cell--name {
+    padding-right: 36px;
+  }
+
+  .cell--drop .ctl-drop {
+    opacity: 1;
+  }
+
+  .cell:not(.cell--name, .cell--drop)::before {
     content: attr(data-label);
     font-size: 10px;
     font-weight: 600;

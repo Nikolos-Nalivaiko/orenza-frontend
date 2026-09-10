@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ClientCreateDialog from '@/components/clients/ClientCreateDialog.vue'
+import ClientDeleteDialog from '@/components/clients/ClientDeleteDialog.vue'
 import ClientsTable from '@/components/clients/ClientsTable.vue'
 import ClientsToolbar from '@/components/clients/ClientsToolbar.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
@@ -14,19 +15,10 @@ import {
   defaultClientFilters,
   totalDue,
   type ClientFilters,
+  type ClientRow,
 } from '@/lib/clientList'
 import { todayIso } from '@/lib/objects'
 import { useObjectsStore } from '@/stores/objects'
-
-/**
- * Довідник замовників. На відміну від обʼєктів, де важать фото й статус, тут
- * важать контакти й цифри — тож список один і той самий, таблицею: у ній
- * колонки читаються згори вниз, і борги видно порівнянням, а не переглядом.
- *
- * Замовника частіше заводять прямо з форми обʼєкта, тож кнопка згори — для
- * іншого випадку: «є контакт, обʼєкт буде потім». Саме тому вона не забирає
- * весь екран, коли список порожній.
- */
 
 const router = useRouter()
 const objects = useObjectsStore()
@@ -34,7 +26,9 @@ const objects = useObjectsStore()
 const filters = ref<ClientFilters>(defaultClientFilters())
 const creating = ref(false)
 
-/** День фіксуємо на час життя екрана: прострочення не має мигати опівночі. */
+const removing = ref<ClientRow | null>(null)
+const deleting = ref(false)
+
 const today = todayIso()
 
 const all = computed(() => clientRows(objects.clients, objects.current, today))
@@ -45,7 +39,6 @@ const debt = computed(() => totalDue(all.value))
 
 const loading = computed(() => objects.isLoading || objects.isLoadingClients)
 
-/** Порожній простір і порожня вибірка — різні екрани й різні дії. */
 const state = computed(() => {
   if (loading.value && objects.clients.length === 0) {
     return 'loading'
@@ -81,6 +74,34 @@ async function create(form: ClientForm): Promise<void> {
 
   creating.value = false
   await router.push({ name: 'client', params: { id: client.id } })
+}
+
+function askRemove(row: ClientRow): void {
+  objects.reset()
+  removing.value = row
+}
+
+async function remove(): Promise<void> {
+  const row = removing.value
+
+  if (row === null || deleting.value) {
+    return
+  }
+
+  deleting.value = true
+
+  const done = await objects.deleteClient(row.client.id)
+
+  deleting.value = false
+
+  if (done) {
+    removing.value = null
+  }
+}
+
+function closeRemove(): void {
+  removing.value = null
+  objects.reset()
 }
 </script>
 
@@ -146,7 +167,18 @@ async function create(form: ClientForm): Promise<void> {
       <button type="button" class="btn btn--ghost btn--sm" @click="reset">Скинути фільтри</button>
     </section>
 
-    <ClientsTable v-else :rows="rows" :today="today" />
+    <ClientsTable v-else :rows="rows" :today="today" @remove="askRemove" />
+
+    <ClientDeleteDialog
+      v-if="removing"
+      :name="removing.client.name"
+      :objects="removing.totals.objects"
+      :due="removing.totals.due"
+      :saving="deleting"
+      :server-error="objects.error"
+      @confirm="remove"
+      @close="closeRemove"
+    />
 
     <ClientCreateDialog
       v-if="creating"

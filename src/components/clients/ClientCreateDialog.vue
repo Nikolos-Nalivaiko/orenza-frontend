@@ -6,21 +6,27 @@ import TextField from '@/components/ui/TextField.vue'
 import {
   emptyClientForm,
   hasClientErrors,
-  validateClientForm,
+  validateNewClientForm,
   type ClientErrors,
   type ClientForm,
 } from '@/lib/clients'
 import type { ClientType } from '@/lib/objects'
 
-const props = defineProps<{ saving?: boolean; serverError?: string | null }>()
+const props = defineProps<{
+  name?: string
+  saving?: boolean
+  serverError?: string | null
+}>()
 
 const emit = defineEmits<{ create: [form: ClientForm]; close: []; dirty: [] }>()
 
 const titleId = useId()
 const typesId = useId()
 
-const form = reactive<ClientForm>(emptyClientForm())
+const form = reactive<ClientForm>({ ...emptyClientForm(), name: props.name ?? '' })
 const errors = ref<ClientErrors>({})
+
+const filled = form.name !== ''
 
 watch(form, () => {
   errors.value = {}
@@ -51,7 +57,7 @@ function onTypeKeydown(event: KeyboardEvent): void {
 }
 
 function submit(): void {
-  errors.value = validateClientForm(form)
+  errors.value = validateNewClientForm(form)
 
   if (hasClientErrors(errors.value)) {
     return
@@ -102,7 +108,7 @@ onBeforeUnmount(() => {
           <p class="eyebrow">Довідник</p>
           <h2 :id="titleId" class="head__title">Новий замовник</h2>
           <p class="head__lead">
-            Обовʼязкове лише імʼя — решту дозаповните, коли буде що записувати.
+            Обовʼязкові імʼя й телефон — решту дозаповните, коли буде що записувати.
           </p>
         </div>
 
@@ -147,7 +153,7 @@ onBeforeUnmount(() => {
             v-model="form.name"
             class="grid__wide"
             :label="isCompany ? 'Назва компанії' : 'Імʼя та прізвище'"
-            autofocus
+            :autofocus="!filled"
             :placeholder="isCompany ? 'ТОВ «Мегабуд»' : 'Олександр Романюк'"
             :error="errors.name"
           />
@@ -163,7 +169,7 @@ onBeforeUnmount(() => {
             :error="errors.contact"
           />
 
-          <PhoneField v-model="form.phone" optional :error="errors.phone" />
+          <PhoneField v-model="form.phone" :autofocus="filled" :error="errors.phone" />
 
           <TextField
             v-model="form.email"

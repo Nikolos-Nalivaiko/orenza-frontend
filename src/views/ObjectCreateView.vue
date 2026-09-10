@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
+import ClientCreateDialog from '@/components/clients/ClientCreateDialog.vue'
 import ClientPicker from '@/components/objects/ClientPicker.vue'
 import CoverPicker from '@/components/objects/CoverPicker.vue'
 import FinancePanel from '@/components/objects/FinancePanel.vue'
@@ -23,6 +24,7 @@ import {
   type ObjectForm,
 } from '@/lib/objects'
 import { formatAmount } from '@/lib/amount'
+import type { ClientForm } from '@/lib/clients'
 import {
   clientDiscount,
   financeTotals,
@@ -70,6 +72,9 @@ const tab = ref<TabKey>('general')
 const submitted = ref(false)
 const draftRestored = ref(false)
 const created = ref<ConstructionObject | null>(null)
+
+/** Імʼя нового замовника, набране в полі: відкриває форму замовника. */
+const newClient = ref<string | null>(null)
 
 /** Помилки живуть у вкладках, тож вкладка має вміти про них сказати. */
 function tabHasErrors(key: TabKey): boolean {
@@ -176,12 +181,20 @@ function resetForm(): void {
   objects.clearDraft()
 }
 
-async function addClient(name: string): Promise<void> {
-  const client = await objects.addClient(name)
+function askClient(name: string): void {
+  objects.reset()
+  newClient.value = name
+}
 
-  if (client !== null) {
-    form.clientId = client.id
+async function addClient(fields: ClientForm): Promise<void> {
+  const client = await objects.createClient(fields)
+
+  if (client === null) {
+    return
   }
+
+  newClient.value = null
+  form.clientId = client.id
 }
 
 async function submit(): Promise<void> {
@@ -413,7 +426,7 @@ async function toObjects(): Promise<void> {
                 v-model="form.clientId"
                 :clients="objects.clients"
                 :loading="objects.isLoadingClients"
-                @create="addClient"
+                @create="askClient"
               />
             </div>
           </div>
@@ -511,6 +524,16 @@ async function toObjects(): Promise<void> {
         <p class="form__note">Далі: етапи робіт і кошторис — вони зʼявляться всередині картки.</p>
       </form>
     </Transition>
+
+    <ClientCreateDialog
+      v-if="newClient !== null"
+      :name="newClient"
+      :saving="objects.isSaving"
+      :server-error="objects.error"
+      @create="addClient"
+      @dirty="objects.reset()"
+      @close="newClient = null"
+    />
   </div>
 </template>
 

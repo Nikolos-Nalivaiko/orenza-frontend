@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CLIENT_PHONE_REQUIRED,
   clientObjects,
   clientPayments,
   clientProfile,
@@ -9,8 +10,11 @@ import {
   isRegularClient,
   validateClientDiscount,
   validateClientForm,
+  validateNewClientForm,
+  type ClientForm,
 } from '../clients'
 import { OBJECT_STATUS_LABELS, type Client, type ConstructionObject } from '../objects'
+import { PHONE_ERROR } from '../validation'
 import type { Material } from '../materials'
 import type { Service } from '../services'
 import type { Payment } from '../finance'
@@ -109,7 +113,6 @@ describe('clientObjects', () => {
 
 describe('clientTotals', () => {
   it('зводить гроші по всіх обʼєктах замовника', () => {
-    // Обʼєкт: 360 000 матеріалів + 100 000 робіт, собівартість 300 000 + 40 000.
     const totals = clientTotals([makeObject(), makeObject({ id: 2 })], TODAY)
 
     expect(totals.objects).toBe(2)
@@ -182,7 +185,6 @@ describe('clientPayments', () => {
       }),
     ])
 
-    // Отримані спочатку, свіже зверху; очікуване йде після них.
     expect(rows.map((row) => row.payment.amount)).toEqual([70_000, 100_000, 50_000])
     expect(rows[0]?.object).toEqual({ id: 2, name: 'Котеджі «Липки»' })
   })
@@ -212,7 +214,6 @@ describe('clientProfile', () => {
   })
 
   it('середній чек рахується по живих обʼєктах', () => {
-    // 460 000 на обʼєкт; архівний у розрахунок не входить.
     const profile = profileOf([
       makeObject(),
       makeObject({ id: 2 }),
@@ -292,5 +293,22 @@ describe('валідація', () => {
         email: 'не пошта',
       }).email,
     ).toBe('Схоже на помилку в адресі')
+  })
+
+  it('новому замовнику телефон обовʼязковий, старому — ні', () => {
+    const form: ClientForm = {
+      type: 'person',
+      name: 'Олександр Романюк',
+      contact: '',
+      phone: '',
+      email: '',
+    }
+
+    expect(validateNewClientForm(form).phone).toBe(CLIENT_PHONE_REQUIRED)
+    expect(validateClientForm(form).phone).toBeUndefined()
+
+    expect(validateNewClientForm({ ...form, phone: '+38067' }).phone).toBe(PHONE_ERROR)
+
+    expect(validateNewClientForm({ ...form, phone: '+380671234567' })).toEqual({})
   })
 })

@@ -866,17 +866,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  async function addClient(name: string): Promise<Client | null> {
-    return createClient({ type: 'person', name, contact: '', phone: '', email: '' })
-  }
-
-  /* ── Картка замовника ────────────────────────────────────────── */
-
-  /**
-   * Обʼєкт носить копію замовника — саме її показують список і картка. Тож
-   * правка в довіднику одразу їде і в обʼєкти: інакше в шапці обʼєкта лишався
-   * б старий телефон, і власник дзвонив би за ним.
-   */
   function applyClient(next: Client): void {
     clients.value = clients.value.map((item) => (item.id === next.id ? next : item))
   }
@@ -998,8 +987,6 @@ export const useObjectsStore = defineStore('objects', () => {
       return null
     }
 
-    // Демообʼєкти живуть у власному діапазоні id — нумерацію створених вони
-    // не зсувають.
     const own = items.value.filter((item) => !isDemoObject(item.id))
 
     const object: ConstructionObject = {
@@ -1020,8 +1007,6 @@ export const useObjectsStore = defineStore('objects', () => {
       discount_percent: payload.discount_percent ?? null,
       discount_amount: payload.discount_amount ?? null,
       payments: (payload.payments ?? []).map((item, index) => toPayment(item, index + 1)),
-      // Посилання для замовника видаємо одразу: воно має бути напоготові ще
-      // до того, як його попросять.
       public_token: newPublicToken(),
       archived_at: null,
       created_at: new Date().toISOString(),
@@ -1124,7 +1109,6 @@ export const useObjectsStore = defineStore('objects', () => {
     findClient,
     fetchClients,
     createClient,
-    addClient,
     updateClient,
     deleteClient,
     setClientNotes,

@@ -309,10 +309,6 @@ export function clientForm(client: Client): ClientForm {
   }
 }
 
-/**
- * Обовʼязкова тут лише назва: замовника заводять з одного слова в полі обʼєкта
- * і дозаповнюють потім, коли вже є що записувати.
- */
 export function validateClientForm(form: ClientForm): ClientErrors {
   const errors: ClientErrors = {}
   const name = form.name.trim()
@@ -336,11 +332,22 @@ export function validateClientForm(form: ClientForm): ClientErrors {
   return errors
 }
 
+export const CLIENT_PHONE_REQUIRED = 'Вкажіть телефон — за ним замовника й шукають'
+
+export function validateNewClientForm(form: ClientForm): ClientErrors {
+  const errors = validateClientForm(form)
+
+  if (errors.phone === undefined && isBlankPhone(form.phone)) {
+    errors.phone = CLIENT_PHONE_REQUIRED
+  }
+
+  return errors
+}
+
 export function hasClientErrors(errors: ClientErrors): boolean {
   return Object.keys(errors).length > 0
 }
 
-/** Тіло запиту PATCH /api/v1/workspaces/{id}/clients/{client}. */
 export interface ClientPayload {
   type: ClientType
   name: string
