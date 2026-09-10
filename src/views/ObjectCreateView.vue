@@ -92,7 +92,7 @@ function tabHasErrors(key: TabKey): boolean {
 }
 
 /** У приватному просторі виконавців немає — послуга йде як чистий дохід. */
-const solo = computed(() => workspaces.current?.type.value === 'personal')
+const solo = computed(() => workspaces.solo)
 
 const servicesSummary = computed(() => servicesTotals(form.services))
 const money = computed(() => financeTotals(form))

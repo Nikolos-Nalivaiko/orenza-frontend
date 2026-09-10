@@ -5,6 +5,7 @@ import { useProgressStore } from './progress'
 import { api, ApiError } from '@/lib/http'
 import {
   buildWorkspacePayload,
+  workspaceFeatures,
   type Workspace,
   type WorkspaceErrors,
   type WorkspaceForm,
@@ -62,6 +63,10 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
   const current = computed(() => items.value.find((item) => item.id === currentId.value) ?? null)
   const isEmpty = computed(() => items.value.length === 0)
   const hasPersonal = computed(() => items.value.some((item) => item.type.value === 'personal'))
+
+  const features = computed(() => workspaceFeatures(current.value))
+  const hasTeam = computed(() => features.value.team)
+  const solo = computed(() => !features.value.team)
 
   function persist(): void {
     write({ items: items.value, currentId: currentId.value })
@@ -161,6 +166,9 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     error,
     fieldErrors,
     hasPersonal,
+    features,
+    hasTeam,
+    solo,
     reset,
     fetchAll,
     create,

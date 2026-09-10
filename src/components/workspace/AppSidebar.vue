@@ -5,7 +5,7 @@ import AppIcon from '@/components/ui/AppIcon.vue'
 import BrandMark from '@/components/ui/BrandMark.vue'
 import WorkspaceSwitcher from '@/components/workspace/WorkspaceSwitcher.vue'
 import { useDismissable } from '@/composables/useDismissable'
-import { NAV, NAV_FOOTER, type NavGroup, type NavItem } from '@/lib/navigation'
+import { navFor, NAV_FOOTER, type NavGroup, type NavItem } from '@/lib/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
@@ -13,6 +13,7 @@ const props = defineProps<{ collapsed: boolean; overdue: number }>()
 const emit = defineEmits<{ toggle: []; navigate: [] }>()
 
 const auth = useAuthStore()
+const workspaces = useWorkspacesStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -37,14 +38,16 @@ function withBadge(item: NavItem): NavItem {
   return item.name === 'dashboard' && props.overdue > 0 ? { ...item, badge: props.overdue } : item
 }
 
+const menu = computed<NavGroup[]>(() => navFor(workspaces.features))
+
 const groups = computed<NavGroup[]>(() => {
   const needle = query.value.trim().toLowerCase()
 
   if (needle === '') {
-    return NAV.map((group) => ({ ...group, items: group.items.map(withBadge) }))
+    return menu.value.map((group) => ({ ...group, items: group.items.map(withBadge) }))
   }
 
-  const items = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
+  const items = [...menu.value.flatMap((group) => group.items), ...NAV_FOOTER]
     .filter((item) => item.label.toLowerCase().includes(needle))
     .map(withBadge)
 
@@ -83,7 +86,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeyDown))
 
 async function signOut(): Promise<void> {
   userOpen.value = false
-  useWorkspacesStore().clear()
+  workspaces.clear()
   await auth.logout()
   await router.push({ name: 'login' })
 }

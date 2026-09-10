@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import AppSidebar from '@/components/workspace/AppSidebar.vue'
 import { dashboardEvents } from '@/lib/dashboard'
@@ -11,11 +11,23 @@ import { useWorkspacesStore } from '@/stores/workspaces'
 const COLLAPSE_KEY = 'orenza.sidebar.collapsed'
 
 const route = useRoute()
+const router = useRouter()
 const workspaces = useWorkspacesStore()
 const objects = useObjectsStore()
 
 /** День для лічильника прострочень; у шапці поруч живе його людський формат. */
 const day = todayIso()
+
+watch(
+  () => workspaces.currentId,
+  () => {
+    const requires = route.meta.requires
+
+    if (requires !== undefined && !workspaces.features[requires]) {
+      void router.replace({ name: 'dashboard' })
+    }
+  },
+)
 
 const collapsed = ref(false)
 const drawer = ref(false)

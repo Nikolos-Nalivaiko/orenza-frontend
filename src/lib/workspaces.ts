@@ -6,13 +6,26 @@
 
 export type WorkspaceType = 'personal' | 'company'
 
+export interface WorkspaceFeatures {
+  team: boolean
+}
+
 export interface Workspace {
   id: number
   type: { value: WorkspaceType; label: string }
+  features: WorkspaceFeatures
   name: string
   slug: string
   owner_id: number
   created_at: string | null
+}
+
+export function workspaceFeatures(workspace: Workspace | null): WorkspaceFeatures {
+  if (workspace === null) {
+    return { team: false }
+  }
+
+  return workspace.features ?? { team: workspace.type.value === 'company' }
 }
 
 /** Підписи типів для інтерфейсу — бекенд віддає label російською. */

@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/ui/icons'
+import type { WorkspaceFeatures } from '@/lib/workspaces'
 
 /**
  * Меню воркспейсу. Один опис на застосунок: із нього збирається і бічна
@@ -10,6 +11,7 @@ export interface NavItem {
   name: string
   label: string
   icon: IconName
+  requires?: keyof WorkspaceFeatures
   /** Розділи, яких ще немає в бекенді, показуємо як «незабаром». */
   soon?: boolean
   /** Лічильник праворуч від назви (наприклад, прострочені задачі). */
@@ -37,7 +39,7 @@ export const NAV: NavGroup[] = [
     title: 'Люди та гроші',
     items: [
       { name: 'clients', label: 'Замовники', icon: 'user' },
-      { name: 'team', label: 'Команда', icon: 'team' },
+      { name: 'team', label: 'Команда', icon: 'team', requires: 'team' },
       { name: 'finance', label: 'Фінанси', icon: 'wallet', soon: true },
     ],
   },
@@ -51,4 +53,15 @@ export const NAV_ITEMS: NavItem[] = [...NAV.flatMap((group) => group.items), ...
 
 export function findNavItem(name: string): NavItem | null {
   return NAV_ITEMS.find((item) => item.name === name) ?? null
+}
+
+export function isAllowed(item: NavItem, features: WorkspaceFeatures): boolean {
+  return item.requires === undefined || features[item.requires]
+}
+
+export function navFor(features: WorkspaceFeatures): NavGroup[] {
+  return NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => isAllowed(item, features)),
+  })).filter((group) => group.items.length > 0)
 }

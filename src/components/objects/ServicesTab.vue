@@ -36,7 +36,7 @@ const employees = useEmployeesStore()
 const workspaces = useWorkspacesStore()
 
 /** Приватний простір: виконавців немає, а вся сума роботи — наш дохід. */
-const solo = computed(() => workspaces.current?.type.value === 'personal')
+const solo = computed(() => workspaces.solo)
 
 const filters = ref(defaultServiceFilters())
 /** Обрані роботи для масових дій; id, а не індекси — список пересортовують. */

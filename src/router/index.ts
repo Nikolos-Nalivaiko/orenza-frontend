@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import type { WorkspaceFeatures } from '@/lib/workspaces'
 import { NAV_FOOTER, NAV } from '@/lib/navigation'
 import { useAuthStore } from '@/stores/auth'
 import { useProgressStore } from '@/stores/progress'
@@ -95,14 +96,18 @@ const router = createRouter({
           path: 'team',
           name: 'team',
           component: () => import('@/views/EmployeesView.vue'),
-          meta: { title: 'Команда', subtitle: 'Співробітники простору та їхнє завантаження' },
+          meta: {
+            title: 'Команда',
+            subtitle: 'Співробітники простору та їхнє завантаження',
+            requires: 'team',
+          },
         },
         /** Картка співробітника — вкладений екран розділу «Команда». */
         {
           path: 'team/:id(\\d+)',
           name: 'employee',
           component: () => import('@/views/EmployeeView.vue'),
-          meta: { title: 'Картка співробітника', section: 'team' },
+          meta: { title: 'Картка співробітника', section: 'team', requires: 'team' },
         },
         /** Картка замовника — вкладений екран розділу «Замовники». */
         {
@@ -145,8 +150,16 @@ router.beforeEach((to) => {
   }
 
   // Всередину простору не пускаємо, поки його не обрано.
-  if (to.meta.requiresWorkspace === true && useWorkspacesStore().current === null) {
+  const workspaces = useWorkspacesStore()
+
+  if (to.meta.requiresWorkspace === true && workspaces.current === null) {
     return { name: 'workspaces' }
+  }
+
+  const requires = to.meta.requires
+
+  if (requires !== undefined && !workspaces.features[requires]) {
+    return { name: 'dashboard' }
   }
 
   return true
@@ -159,5 +172,11 @@ router.afterEach((to) => {
 
   document.title = title === null ? 'Orenza' : `${title} — Orenza`
 })
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    requires?: keyof WorkspaceFeatures
+  }
+}
 
 export default router
