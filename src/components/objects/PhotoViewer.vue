@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { formatMomentTime } from '@/lib/activity'
+import { formatMomentTime } from '@/lib/moment'
 import { formatDay } from '@/lib/objects'
 import type { ObjectPhoto } from '@/lib/photos'
 

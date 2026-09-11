@@ -2,26 +2,16 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
-import { formatAmount } from '@/lib/amount'
-import {
-  formatPositions,
-  MATERIAL_STATUS_LABELS,
-  type Material,
-  type MaterialPayload,
-  type MaterialStatus,
-} from '@/lib/materials'
+import type { Material, MaterialPayload, MaterialStatus } from '@/lib/materials'
 import {
   normalizeDiscount,
   normalizePayment,
-  PAYMENT_STATUS_LABELS,
   type Payment,
   type PaymentPayload,
   type PaymentStatus,
 } from '@/lib/finance'
 import {
-  formatWorks,
   normalizeServiceWorker,
-  SERVICE_STATUS_LABELS,
   type Service,
   type ServicePayload,
   type ServiceStatus,
@@ -31,8 +21,6 @@ import {
   buildObjectCorePayload,
   buildObjectPayload,
   emptyObjectForm,
-  formatDay,
-  formatDiscount,
   normalizeClient,
   OBJECT_STATUS_LABELS,
   todayIso,
@@ -45,13 +33,11 @@ import {
 } from '@/lib/objects'
 import { buildClientPayload, type ClientForm } from '@/lib/clients'
 import { api, ApiError } from '@/lib/http'
-import { transition, type ActivityKind, type ActivityRecord } from '@/lib/activity'
 import { photosOf, type ObjectPhoto } from '@/lib/photos'
 
 const EXTRAS_KEY = 'orenza.objects.extras'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
-const ACTIVITY_KEY = 'orenza.objects.activity'
 const PHOTOS_KEY = 'orenza.objects.photos'
 
 function readStorage(key: string): string | null {
@@ -116,7 +102,7 @@ export const useObjectsStore = defineStore('objects', () => {
 
   const links = ref<Record<number, number | null>>({})
 
-  for (const stale of ['orenza.clients', 'orenza.objects']) {
+  for (const stale of ['orenza.clients', 'orenza.objects', 'orenza.objects.activity']) {
     try {
       localStorage.removeItem(stale)
     } catch {}
@@ -155,14 +141,13 @@ export const useObjectsStore = defineStore('objects', () => {
     }))
   })
 
-  /** Журнал дій — те, чого з самого обʼєкта не відновити. Див. lib/activity. */
-  const activity = ref<ActivityRecord[]>(readList<ActivityRecord>(ACTIVITY_KEY, []))
   const photos = ref<ObjectPhoto[]>(readList<ObjectPhoto>(PHOTOS_KEY, []))
 
   /** Знімки не влізли у сховище — вони живуть лише до перезавантаження. */
   const photosVolatile = ref(false)
 
   const isLoading = ref(true)
+  const isOpening = ref(false)
   /** Список бодай раз доїхав: картку обʼєкта відкривають і прямим посиланням. */
   const loaded = ref(false)
   const isLoadingClients = ref(true)
@@ -267,6 +252,60 @@ export const useObjectsStore = defineStore('objects', () => {
     return items.value.find((item) => item.id === id) ?? null
   }
 
+  async function loadObject(id: number): Promise<void> {
+    const path = objectsPath()
+
+    if (path === null) {
+      return
+    }
+
+    const cold = find(id) === null
+
+    isOpening.value = cold
+    error.value = null
+
+    try {
+      const core = await progress.track(api.get<ObjectCore>(`${path}/${id}`))
+
+      if (objectsPath() !== path) {
+        return
+      }
+
+      const object = fromApi(core)
+
+      items.value =
+        find(id) === null
+          ? [...items.value, object]
+          : items.value.map((item) => (item.id === id ? object : item))
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 404) {
+        items.value = items.value.filter((item) => item.id !== id)
+      } else {
+        error.value = clientError(cause, 'Не вдалося відкрити обʼєкт.')
+      }
+    } finally {
+      isOpening.value = false
+    }
+  }
+
+  const opening = new Map<number, Promise<void>>()
+
+  function fetchObject(id: number): Promise<void> {
+    const running = opening.get(id)
+
+    if (running !== undefined) {
+      return running
+    }
+
+    const request = loadObject(id).finally(() => {
+      opening.delete(id)
+    })
+
+    opening.set(id, request)
+
+    return request
+  }
+
   /**
    * Публічна сторінка знаходить обʼєкт лише за токеном: id туди не потрапляє
    * взагалі, тож і перебирати нічого.
@@ -313,52 +352,11 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /* ── Стрічка подій ───────────────────────────────────────────── */
+  /* ── Фото ────────────────────────────────────────────────────── */
 
   function nextId(rows: { id: number }[]): number {
     return Math.max(0, ...rows.map((row) => row.id)) + 1
   }
-
-  /** Запис у журнал. Автоподії сюди не пишемо — вони виводяться з обʼєкта. */
-  function log(
-    objectId: number,
-    kind: ActivityKind,
-    text: string,
-    detail: string | null = null,
-  ): void {
-    activity.value = [
-      ...activity.value,
-      {
-        id: nextId(activity.value),
-        object_id: objectId,
-        kind,
-        text,
-        detail,
-        at: new Date().toISOString(),
-      },
-    ]
-
-    write(ACTIVITY_KEY, activity.value)
-  }
-
-  function activityOf(id: number): ActivityRecord[] {
-    return activity.value.filter((record) => record.object_id === id)
-  }
-
-  function addNote(id: number, text: string): void {
-    const note = text.trim()
-
-    if (note !== '') {
-      log(id, 'note', note)
-    }
-  }
-
-  function removeRecord(recordId: number): void {
-    activity.value = activity.value.filter((record) => record.id !== recordId)
-    write(ACTIVITY_KEY, activity.value)
-  }
-
-  /* ── Фото ────────────────────────────────────────────────────── */
 
   function objectPhotos(id: number): ObjectPhoto[] {
     return photosOf(photos.value, id)
@@ -403,19 +401,12 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     patch(id, { status: { value, label: OBJECT_STATUS_LABELS[value] } })
-    log(
-      id,
-      'status',
-      'Змінено статус',
-      transition(object.status.label, OBJECT_STATUS_LABELS[value]),
-    )
 
     await sync(id, changes, 'Не вдалося змінити статус.')
   }
 
   async function setArchived(id: number, archived: boolean): Promise<void> {
     patch(id, { archived_at: archived ? new Date().toISOString() : null })
-    log(id, 'object', archived ? 'Обʼєкт в архіві' : 'Обʼєкт повернуто з архіву')
 
     await sync(id, { archived }, 'Не вдалося змінити архів.')
   }
@@ -429,16 +420,10 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     patch(id, { description: next })
-    log(id, 'object', next === null ? 'Опис прибрано' : 'Оновлено опис')
 
     await sync(id, { description: next }, 'Не вдалося зберегти опис.')
   }
 
-  /**
-   * Планові дати — домовленість із замовником, тож їхню зміну фіксуємо
-   * окремим записом. Фактичні самі по собі події стрічки: вони приїдуть туди
-   * з обʼєкта, і другий запис був би дублем.
-   */
   async function setDate(id: number, field: ObjectDateField, value: string): Promise<void> {
     const object = find(id)
     const next = value === '' ? null : value
@@ -448,15 +433,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     patch(id, { [field]: next })
-
-    if (field === 'started_at' || field === 'finished_at') {
-      log(
-        id,
-        'object',
-        field === 'started_at' ? 'Змінено плановий початок' : 'Змінено плановий дедлайн',
-        transition(formatDay(object[field] ?? ''), formatDay(next ?? '')),
-      )
-    }
 
     await sync(id, { [field]: next }, 'Не вдалося зберегти дату.')
   }
@@ -477,15 +453,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     patch(id, { discount_percent: percent, discount_amount: amount })
-    log(
-      id,
-      'object',
-      'Змінено знижку',
-      transition(
-        formatDiscount(object.discount_percent, object.discount_amount),
-        formatDiscount(percent, amount),
-      ),
-    )
 
     await sync(
       id,
@@ -506,11 +473,6 @@ export const useObjectsStore = defineStore('objects', () => {
     patch(id, { materials })
   }
 
-  /**
-   * Поява матеріалу в журнал не пишеться: стрічка виводить її з самого
-   * обʼєкта (див. lib/activity). А от рух по стадіях і зникнення позиції з
-   * даних не відновити — їх фіксуємо.
-   */
   async function addMaterial(id: number, payload: MaterialPayload): Promise<void> {
     const path = materialsPath(id)
     const object = find(id)
@@ -532,8 +494,7 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /**
    * Статус міняють і поштучно, і цілою фурою — тож приймаємо список. Позиції,
-   * які вже стоять у цьому статусі, не рахуються зміненими: вони не мають
-   * потрапляти ні в стрічку, ні в підпис «оновлено N позицій».
+   * які вже стоять у цьому статусі, зміненими не рахуються.
    */
   async function setMaterialStatus(
     id: number,
@@ -565,24 +526,7 @@ export const useObjectsStore = defineStore('objects', () => {
       applyMaterials(id, merged(object.materials, updated))
     } catch (cause) {
       error.value = clientError(cause, 'Не вдалося змінити статус матеріалів.')
-
-      return
     }
-
-    const label = MATERIAL_STATUS_LABELS[value]
-
-    // Одна позиція — видно, звідки й куди вона пішла; десяток з однієї
-    // поставки йде одним записом, інакше стрічка стає журналом складу.
-    const single = changed.length === 1 ? changed[0] : undefined
-
-    log(
-      id,
-      'material',
-      single === undefined ? 'Оновлено статуси матеріалів' : 'Змінено статус матеріалу',
-      single === undefined
-        ? `${formatPositions(changed.length)} → ${label}`
-        : `${single.name}: ${transition(single.status.label, label)}`,
-    )
   }
 
   /** Погодження замовником — прапорець, який ставлять і знімають на ходу. */
@@ -634,12 +578,6 @@ export const useObjectsStore = defineStore('objects', () => {
       id,
       object.materials.filter((item) => item.id !== materialId),
     )
-    log(
-      id,
-      'material',
-      'Прибрано матеріал',
-      `${material.name}, ${formatAmount(material.quantity)} ${material.unit}`,
-    )
   }
 
   /* ── Роботи обʼєкта ──────────────────────────────────────────── */
@@ -660,11 +598,6 @@ export const useObjectsStore = defineStore('objects', () => {
     return current.map((item) => byId.get(item.id) ?? item)
   }
 
-  /**
-   * Поява роботи в журнал не пишеться — стрічка виводить її з обʼєкта. А от
-   * рух по стадіях, факт-обсяг і склад бригади не відновити з даних, тож їх
-   * фіксуємо окремими записами.
-   */
   async function addService(id: number, payload: ServicePayload): Promise<void> {
     const path = servicesPath(id)
     const object = find(id)
@@ -715,7 +648,7 @@ export const useObjectsStore = defineStore('objects', () => {
   /**
    * Стадію міняють і поштучно, і на цілу бригаду, яка зайшла на обʼєкт, — тож
    * приймаємо список. Роботи, які вже стоять у цій стадії, зміненими не
-   * рахуються: вони не мають потрапляти ні в стрічку, ні в підпис.
+   * рахуються.
    */
   async function setServiceStatus(
     id: number,
@@ -747,24 +680,9 @@ export const useObjectsStore = defineStore('objects', () => {
       applyServices(id, mergedServices(object.services, updated))
     } catch (cause) {
       error.value = clientError(cause, 'Не вдалося змінити статус робіт.')
-
-      return
     }
-
-    const label = SERVICE_STATUS_LABELS[value]
-    const single = changed.length === 1 ? changed[0] : undefined
-
-    log(
-      id,
-      'service',
-      single === undefined ? 'Оновлено статуси робіт' : 'Змінено статус роботи',
-      single === undefined
-        ? `${formatWorks(changed.length)} → ${label}`
-        : `${single.name}: ${transition(single.status.label, label)}`,
-    )
   }
 
-  /** Факт-обсяг — те, за чим рахують гроші: його поява варта запису. */
   async function setServiceFact(
     id: number,
     serviceId: number,
@@ -777,25 +695,7 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    const saved = await patchService(
-      id,
-      serviceId,
-      { actual_volume: volume },
-      'Не вдалося зберегти факт-обсяг.',
-    )
-
-    if (saved === null) {
-      return
-    }
-
-    log(
-      id,
-      'service',
-      volume === null ? 'Прибрано факт-обсяг' : 'Внесено факт-обсяг',
-      volume === null
-        ? service.name
-        : `${service.name}: ${formatAmount(volume)} ${service.unit} з ${formatAmount(service.planned_volume)}`,
-    )
+    await patchService(id, serviceId, { actual_volume: volume }, 'Не вдалося зберегти факт-обсяг.')
   }
 
   async function setServiceWorkers(
@@ -810,22 +710,7 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    const saved = await patchService(id, serviceId, { workers }, 'Не вдалося зберегти виконавців.')
-
-    if (saved === null) {
-      return
-    }
-
-    const wage = workers.reduce((sum, worker) => sum + worker.volume * worker.rate, 0)
-
-    log(
-      id,
-      'service',
-      workers.length === 0 ? 'Знято виконавців' : 'Оновлено виконавців',
-      workers.length === 0
-        ? service.name
-        : `${service.name}: ${workers.length} чол., ЗП ${formatAmount(wage)} ₴`,
-    )
+    await patchService(id, serviceId, { workers }, 'Не вдалося зберегти виконавців.')
   }
 
   async function removeService(id: number, serviceId: number): Promise<void> {
@@ -851,12 +736,6 @@ export const useObjectsStore = defineStore('objects', () => {
       id,
       object.services.filter((item) => item.id !== serviceId),
     )
-    log(
-      id,
-      'service',
-      'Прибрано роботу',
-      `${service.name}, ${formatAmount(service.planned_volume)} ${service.unit}`,
-    )
   }
 
   /* ── Платежі обʼєкта ─────────────────────────────────────────── */
@@ -867,10 +746,6 @@ export const useObjectsStore = defineStore('objects', () => {
     return path === null ? null : `${path}/${id}/payments`
   }
 
-  /**
-   * Гроші замовника: і те, що вже прийшло, і те, чого ще чекаємо. Кожен рух
-   * тут — подія, за якою потім звіряються, тож у стрічку йде все.
-   */
   async function addPayment(id: number, payload: PaymentPayload): Promise<void> {
     const path = paymentsPath(id)
     const object = find(id)
@@ -885,12 +760,6 @@ export const useObjectsStore = defineStore('objects', () => {
       const created = await progress.track(api.post<Payment>(path, payload))
 
       patch(id, { payments: [...object.payments, created] })
-      log(
-        id,
-        'payment',
-        created.status.value === 'paid' ? 'Отримано платіж' : 'Заплановано платіж',
-        `${formatAmount(created.amount)} ₴${created.paid_at === null ? '' : `, ${formatDay(created.paid_at)}`}`,
-      )
     } catch (cause) {
       error.value = clientError(cause, 'Не вдалося додати платіж.')
     }
@@ -945,37 +814,7 @@ export const useObjectsStore = defineStore('objects', () => {
       return
     }
 
-    const after = await savePayment(id, paymentId, { ...payload }, 'Не вдалося зберегти платіж.')
-
-    if (after === null) {
-      return
-    }
-
-    // У стрічку йде та зміна, заради якої платіж і відкривали: спочатку
-    // гроші, потім стан, і лише потім — підпис.
-    if (before.amount !== after.amount) {
-      log(
-        id,
-        'payment',
-        'Виправлено суму платежу',
-        transition(`${formatAmount(before.amount)} ₴`, `${formatAmount(after.amount)} ₴`),
-      )
-
-      return
-    }
-
-    if (before.status.value !== after.status.value) {
-      log(
-        id,
-        'payment',
-        'Змінено статус платежу',
-        `${formatAmount(after.amount)} ₴: ${transition(before.status.label, after.status.label)}`,
-      )
-
-      return
-    }
-
-    log(id, 'payment', 'Виправлено платіж', `${formatAmount(after.amount)} ₴, ${after.name}`)
+    await savePayment(id, paymentId, { ...payload }, 'Не вдалося зберегти платіж.')
   }
 
   /** Гроші прийшли — платіж із очікуваного стає отриманим, і навпаки. */
@@ -998,18 +837,7 @@ export const useObjectsStore = defineStore('objects', () => {
       changes.paid_at = date
     }
 
-    const saved = await savePayment(id, paymentId, changes, 'Не вдалося змінити статус платежу.')
-
-    if (saved === null) {
-      return
-    }
-
-    log(
-      id,
-      'payment',
-      value === 'paid' ? 'Отримано платіж' : 'Змінено статус платежу',
-      `${formatAmount(payment.amount)} ₴: ${transition(payment.status.label, PAYMENT_STATUS_LABELS[value])}`,
-    )
+    await savePayment(id, paymentId, changes, 'Не вдалося змінити статус платежу.')
   }
 
   async function removePayment(id: number, paymentId: number): Promise<void> {
@@ -1032,7 +860,6 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     patch(id, { payments: object.payments.filter((item) => item.id !== paymentId) })
-    log(id, 'payment', 'Прибрано платіж', `${formatAmount(payment.amount)} ₴`)
   }
 
   async function remove(id: number): Promise<boolean> {
@@ -1056,11 +883,9 @@ export const useObjectsStore = defineStore('objects', () => {
 
     // Разом з обʼєктом їде і все, що до нього кріпилось.
     delete extras.value[id]
-    activity.value = activity.value.filter((record) => record.object_id !== id)
     photos.value = photos.value.filter((photo) => photo.object_id !== id)
 
     persist()
-    write(ACTIVITY_KEY, activity.value)
     write(PHOTOS_KEY, photos.value)
 
     return true
@@ -1274,6 +1099,7 @@ export const useObjectsStore = defineStore('objects', () => {
     count,
     view,
     isLoading,
+    isOpening,
     isLoadingClients,
     isSaving,
     error,
@@ -1281,6 +1107,7 @@ export const useObjectsStore = defineStore('objects', () => {
     reset,
     setView,
     fetchObjects,
+    fetchObject,
     fetchTrack,
     find,
     findByToken,
@@ -1304,9 +1131,6 @@ export const useObjectsStore = defineStore('objects', () => {
     removePayment,
     remove,
     photosVolatile,
-    activityOf,
-    addNote,
-    removeRecord,
     objectPhotos,
     addPhoto,
     removePhoto,

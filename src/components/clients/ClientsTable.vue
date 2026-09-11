@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { formatMomentDay } from '@/lib/activity'
+import { formatMomentDay } from '@/lib/moment'
 import { formatAmount } from '@/lib/amount'
 import { formatActive } from '@/lib/clients'
 import type { ClientRow } from '@/lib/clientList'

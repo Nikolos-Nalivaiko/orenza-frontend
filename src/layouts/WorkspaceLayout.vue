@@ -50,6 +50,10 @@ onMounted(() => {
   syncNarrow()
   narrowQuery.addEventListener('change', syncNarrow)
 
+  if (!objects.loaded) {
+    void objects.fetchObjects()
+  }
+
   try {
     collapsed.value = localStorage.getItem(COLLAPSE_KEY) === '1'
   } catch {

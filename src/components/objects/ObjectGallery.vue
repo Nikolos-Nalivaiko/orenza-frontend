@@ -2,7 +2,7 @@
 import { computed, ref, useTemplateRef } from 'vue'
 import PhotoViewer from '@/components/objects/PhotoViewer.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
-import { formatMomentDay } from '@/lib/activity'
+import { formatMomentDay } from '@/lib/moment'
 import {
   PHOTO_MAX_BYTES,
   PHOTO_MAX_SIDE,

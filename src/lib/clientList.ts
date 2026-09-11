@@ -13,7 +13,7 @@
  * джерело: ClientRow — уже той формат, у якому екран показує рядок.
  */
 
-import { momentTime } from '@/lib/activity'
+import { momentTime } from '@/lib/moment'
 import { clientObjects, clientTotals, isRegularClient, type ClientTotals } from '@/lib/clients'
 import type { Client, ConstructionObject } from '@/lib/objects'
 

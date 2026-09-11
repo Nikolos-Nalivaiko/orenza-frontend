@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import FinanceTab from '@/components/objects/FinanceTab.vue'
 import MaterialsTab from '@/components/objects/MaterialsTab.vue'
@@ -22,7 +22,7 @@ const TABS: readonly { key: TabKey; label: string; plan: string }[] = [
   {
     key: 'overview',
     label: 'Огляд',
-    plan: 'Загальна інформація, фото з майданчика, нотатки й стрічка подій по обʼєкту.',
+    plan: 'Загальна інформація, ключові гроші й фото з майданчика.',
   },
   {
     key: 'materials',
@@ -58,12 +58,18 @@ const removable = computed(
     object.value.payments.length === 0,
 )
 
-onMounted(() => {
-  // Картку відкривають і прямим посиланням — тоді список ще не їхав.
-  if (!objects.loaded) {
-    void objects.fetchObjects()
-  }
-})
+const missing = computed(
+  () =>
+    !objects.isOpening &&
+    objects.error === null &&
+    (object.value === null || summary.value === null),
+)
+
+watch(id, (value) => void objects.fetchObject(value), { immediate: true })
+
+function reload(): void {
+  void objects.fetchObject(id.value)
+}
 
 async function setStatus(status: ObjectStatus): Promise<void> {
   await objects.setStatus(id.value, status)
@@ -94,13 +100,13 @@ async function archiveFromDialog(): Promise<void> {
   <div class="object">
     <p v-if="objects.error" class="failed" role="alert">
       <span>{{ objects.error }}</span>
-      <button type="button" class="failed__retry" @click="objects.reset()">Сховати</button>
+      <button type="button" class="failed__retry" @click="reload">Оновити</button>
     </p>
 
-    <p v-if="objects.isLoading" class="loading">Відкриваємо картку…</p>
+    <p v-if="objects.isOpening" class="loading">Відкриваємо картку…</p>
 
     <!-- Обʼєкта немає: чужий простір, видалений запис або просто друкарка в адресі. -->
-    <section v-else-if="object === null || summary === null" class="missing">
+    <section v-else-if="missing" class="missing">
       <span class="missing__icon" aria-hidden="true"><AppIcon name="alert" /></span>
       <h1 class="display missing__title">Такого обʼєкта немає</h1>
       <p class="missing__text">Можливо, його видалили або він належить іншому робочому простору.</p>
@@ -109,7 +115,7 @@ async function archiveFromDialog(): Promise<void> {
       </RouterLink>
     </section>
 
-    <template v-else>
+    <template v-else-if="object !== null && summary !== null">
       <ObjectHeader
         :object="object"
         :summary="summary"

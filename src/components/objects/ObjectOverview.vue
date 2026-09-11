@@ -1,24 +1,21 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import ObjectActivity from '@/components/objects/ObjectActivity.vue'
 import ObjectFacts from '@/components/objects/ObjectFacts.vue'
 import ObjectGallery from '@/components/objects/ObjectGallery.vue'
 import ObjectMoney from '@/components/objects/ObjectMoney.vue'
-import { objectActivity } from '@/lib/activity'
 import type { ConstructionObject, ObjectDateField } from '@/lib/objects'
 import type { ObjectSummary } from '@/lib/objectList'
 import { useObjectsStore } from '@/stores/objects'
 
 /**
- * Вкладка «Огляд»: те, чого немає в шапці, стрічка подій і фото з майданчика.
- * Порядок блоків — порядок питань до обʼєкта: що це → що з ним відбувалось →
- * як воно виглядає.
+ * Вкладка «Огляд»: те, чого немає в шапці, і фото з майданчика. Порядок
+ * блоків — порядок питань до обʼєкта: що це → як воно виглядає.
  */
 
 const props = defineProps<{
   object: ConstructionObject
   summary: ObjectSummary
-  /** День фіксує екран картки — дати в стрічці не мають мигати опівночі. */
+  /** День фіксує екран картки — дати не мають мигати опівночі. */
   today: string
 }>()
 
@@ -27,10 +24,6 @@ const emit = defineEmits<{ finance: [] }>()
 const objects = useObjectsStore()
 
 const photos = computed(() => objects.objectPhotos(props.object.id))
-
-const entries = computed(() =>
-  objectActivity(props.object, objects.activityOf(props.object.id), photos.value),
-)
 
 async function setDescription(value: string): Promise<void> {
   await objects.setDescription(props.object.id, value)
@@ -42,10 +35,6 @@ async function setDate(field: ObjectDateField, value: string): Promise<void> {
 
 async function setDiscount(percent: number | null, amount: number | null): Promise<void> {
   await objects.setDiscount(props.object.id, percent, amount)
-}
-
-function addNote(text: string): void {
-  objects.addNote(props.object.id, text)
 }
 
 function addPhoto(src: string, name: string): void {
@@ -66,15 +55,6 @@ function addPhoto(src: string, name: string): void {
       />
 
       <ObjectMoney :summary="summary" @open="emit('finance')" />
-    </section>
-
-    <section class="card">
-      <ObjectActivity
-        :entries="entries"
-        :today="today"
-        @note="addNote"
-        @remove="objects.removeRecord"
-      />
     </section>
 
     <section class="card">
