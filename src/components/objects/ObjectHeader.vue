@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import CoverEditor from '@/components/cover/CoverEditor.vue'
+import CoverImage from '@/components/cover/CoverImage.vue'
 import ObjectActions from '@/components/objects/ObjectActions.vue'
 import ObjectShare from '@/components/objects/ObjectShare.vue'
 import ObjectStatusMenu from '@/components/objects/ObjectStatusMenu.vue'
@@ -24,6 +26,8 @@ const emit = defineEmits<{
 }>()
 
 const archived = computed(() => props.object.archived_at !== null)
+
+const editingCover = ref(false)
 
 /** Переплату показуємо як переплату — сума з мінусом нікому ні про що не каже. */
 const overpaid = computed(() => props.summary.due < 0)
@@ -93,6 +97,23 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
 
 <template>
   <header class="ohead">
+    <div class="banner" :class="{ 'banner--empty': object.cover === null }">
+      <CoverImage
+        :cover="object.cover"
+        :name="object.name"
+        variant="hero"
+        sizes="(max-width: 1200px) 100vw, 1200px"
+        eager
+      />
+
+      <button type="button" class="banner__edit" @click="editingCover = true">
+        <AppIcon :name="object.cover === null ? 'plus' : 'image'" />
+        <span>{{ object.cover === null ? 'Додати обкладинку' : 'Змінити обкладинку' }}</span>
+      </button>
+    </div>
+
+    <CoverEditor v-if="editingCover" :object="object" @close="editingCover = false" />
+
     <!-- Хлібні крихти йдуть окремим рядком: у колонці з назвою вони робили
          текст на рядок вищим за обкладинку, і адреса звисала збоку. -->
     <p class="eyebrow ohead__crumbs">
@@ -102,12 +123,6 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
     </p>
 
     <div class="ohead__top">
-      <!-- Обкладинка маленька: вона впізнає обʼєкт, а не прикрашає екран. -->
-      <span class="cover">
-        <img v-if="object.cover" class="cover__photo" :src="object.cover" alt="" />
-        <span v-else class="cover__ghost" aria-hidden="true"><AppIcon name="building" /></span>
-      </span>
-
       <div class="ohead__intro">
         <h1 class="display ohead__title">
           {{ object.name }}
@@ -322,6 +337,88 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
   gap: 16px;
 }
 
+.banner {
+  position: relative;
+  overflow: hidden;
+  height: clamp(150px, 18vw, 250px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--paper-sunk);
+}
+
+.banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, rgb(9 13 10 / 32%));
+  pointer-events: none;
+}
+
+.banner--empty {
+  height: 112px;
+}
+
+.banner--empty::after {
+  display: none;
+}
+
+.banner__edit {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(9 13 10 / 62%);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity 0.2s var(--ease),
+    transform 0.2s var(--ease),
+    background-color 0.18s var(--ease);
+}
+
+.banner:hover .banner__edit,
+.banner__edit:focus-visible,
+.banner--empty .banner__edit {
+  opacity: 1;
+  transform: none;
+}
+
+.banner--empty .banner__edit {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.banner__edit:hover {
+  background: rgb(9 13 10 / 80%);
+}
+
+.banner--empty .banner__edit:hover {
+  background: #fff;
+}
+
+.banner__edit :deep(.icon) {
+  width: 15px;
+  height: 15px;
+}
+
+@media (hover: none) {
+  .banner__edit {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .ohead__crumbs {
   display: inline-flex;
   align-items: center;
@@ -335,37 +432,6 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
   display: flex;
   align-items: center;
   gap: 14px;
-}
-
-.cover {
-  display: block;
-  flex: none;
-  overflow: hidden;
-  width: 64px;
-  height: 64px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  background: var(--paper-sunk);
-}
-
-.cover__photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.cover__ghost {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  background: linear-gradient(135deg, var(--brand-tint), var(--paper-sunk));
-  color: var(--brand-strong);
-}
-
-.cover__ghost :deep(.icon) {
-  width: 26px;
-  height: 26px;
-  opacity: 0.6;
 }
 
 .ohead__intro {

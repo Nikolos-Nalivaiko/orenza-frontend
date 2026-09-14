@@ -496,7 +496,7 @@ async function toObjects(): Promise<void> {
           <div class="part">
             <h3 class="part__title">Обкладинка</h3>
 
-            <div class="part__fields part__fields--narrow">
+            <div class="part__fields">
               <CoverPicker v-model="form.cover" />
             </div>
           </div>

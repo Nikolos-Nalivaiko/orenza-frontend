@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import CoverImage from '@/components/cover/CoverImage.vue'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import { formatAmount } from '@/lib/amount'
 import { formatDay } from '@/lib/objects'
@@ -26,11 +27,17 @@ function percent(value: number): string {
     <ul class="orows">
       <li v-for="{ object, summary } in rows" :key="object.id" class="orow">
         <div class="cell cell--name">
-          <!-- Уся ідентифікація обʼєкта — одне посилання: клікати треба в назву. -->
-          <RouterLink class="orow__link" :to="{ name: 'object', params: { id: object.id } }">
-            {{ object.name }}
-          </RouterLink>
-          <p class="orow__address">{{ object.address }}</p>
+          <span class="orow__thumb">
+            <CoverImage :cover="object.cover" :name="object.name" variant="thumb" sizes="44px" />
+          </span>
+
+          <span class="orow__ident">
+            <!-- Уся ідентифікація обʼєкта — одне посилання: клікати треба в назву. -->
+            <RouterLink class="orow__link" :to="{ name: 'object', params: { id: object.id } }">
+              {{ object.name }}
+            </RouterLink>
+            <p class="orow__address">{{ object.address }}</p>
+          </span>
         </div>
 
         <div class="cell" data-label="Замовник">
@@ -137,6 +144,27 @@ function percent(value: number): string {
 }
 
 .cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cell--name {
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.orow__thumb {
+  display: block;
+  overflow: hidden;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
+.orow__ident {
   display: grid;
   gap: 4px;
   min-width: 0;

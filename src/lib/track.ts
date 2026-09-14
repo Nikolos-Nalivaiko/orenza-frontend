@@ -1,7 +1,9 @@
+import type { ObjectCover } from '@/lib/cover'
 import type { DueState } from '@/lib/finance'
 import { api } from '@/lib/http'
 import type { MaterialStatus } from '@/lib/materials'
 import type { ObjectStatus } from '@/lib/objects'
+import type { ViewerPhoto } from '@/lib/photos'
 import type { ServiceStatus } from '@/lib/services'
 
 interface Labeled<T extends string> {
@@ -28,6 +30,16 @@ export interface TrackServiceResource {
   total: number
 }
 
+export interface TrackPhotoResource {
+  id: number
+  thumb: string
+  full: string
+  width: number
+  height: number
+  color: string
+  at: string | null
+}
+
 export interface TrackPaymentResource {
   id: number
   date: string | null
@@ -41,7 +53,7 @@ export interface TrackResource {
   address: string
   description: string | null
   status: Labeled<ObjectStatus>
-  cover: string | null
+  cover: ObjectCover | null
   readiness: number | null
   works: { done: number; total: number }
   started_at: string | null
@@ -58,6 +70,7 @@ export interface TrackResource {
     progress: number
     state: Labeled<DueState>
   }
+  photos?: TrackPhotoResource[]
   payments: TrackPaymentResource[]
 }
 
@@ -101,7 +114,7 @@ export interface TrackObject {
   address: string
   description: string | null
   status: Labeled<ObjectStatus>
-  cover: string | null
+  cover: ObjectCover | null
   readiness: number | null
   works: { done: number; total: number }
   plannedStart: string | null
@@ -112,6 +125,7 @@ export interface TrackObject {
   materials: TrackMaterial[]
   services: TrackService[]
   money: TrackMoney
+  photos: ViewerPhoto[]
   payments: TrackPayment[]
 }
 
@@ -153,6 +167,15 @@ export function normalizeTrack(resource: TrackResource): TrackObject {
       progress: resource.money.progress,
       state: resource.money.state.value,
     },
+    photos: (resource.photos ?? []).map((photo) => ({
+      id: photo.id,
+      thumb: photo.thumb,
+      full: photo.full,
+      width: photo.width,
+      height: photo.height,
+      color: photo.color,
+      at: photo.at,
+    })),
     payments: resource.payments.map((payment) => ({
       id: payment.id,
       date: payment.date,

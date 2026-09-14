@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import CoverImage from '@/components/cover/CoverImage.vue'
+import PhotoViewer from '@/components/objects/PhotoViewer.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
 import { DUE_STATE_LABELS } from '@/lib/finance'
@@ -21,6 +23,8 @@ const route = useRoute()
 const token = computed(() => String(route.params.token ?? ''))
 
 const view = ref<TrackObject | null>(null)
+const viewing = ref<number | null>(null)
+const shown = ref<Record<number, boolean>>({})
 const isLoading = ref(true)
 const missing = ref(false)
 const error = ref<string | null>(null)
@@ -54,6 +58,14 @@ async function load(): Promise<void> {
   }
 
   isLoading.value = false
+}
+
+const photos = computed(() => view.value?.photos ?? [])
+
+function openPhoto(index: number): void {
+  if (photos.value.length > 0) {
+    viewing.value = index
+  }
 }
 
 const percent = computed(() =>
@@ -95,13 +107,23 @@ onBeforeUnmount(() => controller?.abort())
     <template v-else>
       <header class="hero">
         <!-- Фото першим і крупно: це те, заради чого сюди й заходять. -->
-        <div class="shot" :class="{ 'shot--empty': !view.cover }">
-          <img v-if="view.cover" class="shot__img" :src="view.cover" alt="" />
-          <span v-else class="shot__ghost" aria-hidden="true"><AppIcon name="building" /></span>
+        <div class="shot">
+          <CoverImage
+            :cover="view.cover"
+            :name="view.name"
+            variant="hero"
+            sizes="(max-width: 1020px) 100vw, 980px"
+            eager
+          />
 
           <span class="shot__status" :class="`shot__status--${view.status.value}`">
             {{ view.status.label }}
           </span>
+
+          <button v-if="photos.length > 0" type="button" class="shot__more" @click="openPhoto(0)">
+            <AppIcon name="image" />
+            {{ photos.length }} фото
+          </button>
         </div>
 
         <div class="intro">
@@ -162,6 +184,37 @@ onBeforeUnmount(() => controller?.abort())
             </div>
           </template>
         </dl>
+      </section>
+
+      <section v-if="photos.length > 0" class="card">
+        <div class="card__head">
+          <h2 class="card__title">Фото з майданчика</h2>
+          <p class="card__hint">Натисніть, щоб роздивитись</p>
+        </div>
+
+        <ul class="gallery">
+          <li v-for="(photo, index) in photos" :key="photo.id">
+            <button
+              type="button"
+              class="tile"
+              :style="{ background: photo.color }"
+              :aria-label="`Відкрити фото ${index + 1} з ${photos.length}`"
+              @click="openPhoto(index)"
+            >
+              <img
+                class="tile__img"
+                :class="{ 'tile__img--ready': shown[photo.id] }"
+                :src="photo.thumb"
+                alt=""
+                loading="lazy"
+                decoding="async"
+                @load="shown[photo.id] = true"
+              />
+              <span v-if="photo.at" class="tile__day">{{ formatDay(photo.at.slice(0, 10)) }}</span>
+              <span class="tile__zoom" aria-hidden="true"><AppIcon name="search" /></span>
+            </button>
+          </li>
+        </ul>
       </section>
 
       <section v-if="view.services.length > 0" class="card">
@@ -290,6 +343,14 @@ onBeforeUnmount(() => controller?.abort())
         </template>
       </section>
 
+      <PhotoViewer
+        v-if="viewing !== null"
+        :photos="photos"
+        :index="viewing"
+        @move="viewing = $event"
+        @close="viewing = null"
+      />
+
       <footer class="foot">
         <p class="foot__text">
           Сторінка оновлюється разом із роботами на обʼєкті — просто відкрийте це посилання ще раз.
@@ -379,25 +440,6 @@ onBeforeUnmount(() => controller?.abort())
   background: var(--paper-sunk);
 }
 
-.shot__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.shot--empty {
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, var(--brand-tint), var(--paper-sunk));
-}
-
-.shot__ghost :deep(.icon) {
-  width: 56px;
-  height: 56px;
-  color: var(--brand-strong);
-  opacity: 0.5;
-}
-
 .shot__status {
   position: absolute;
   top: 14px;
@@ -419,6 +461,36 @@ onBeforeUnmount(() => controller?.abort())
 .shot__status--done {
   background: var(--ink);
   color: #fff;
+}
+
+.shot__more {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 15px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(9 13 10 / 62%);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  transition:
+    background-color 0.18s var(--ease),
+    transform 0.18s var(--ease);
+}
+
+.shot__more:hover {
+  background: rgb(9 13 10 / 80%);
+  transform: translateY(-1px);
+}
+
+.shot__more :deep(.icon) {
+  width: 15px;
+  height: 15px;
 }
 
 .intro {
@@ -461,6 +533,19 @@ onBeforeUnmount(() => controller?.abort())
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--paper-raised);
+}
+
+.card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.card__hint {
+  font-size: 11.5px;
+  color: var(--ink-faint);
 }
 
 .card__title {
@@ -556,6 +641,88 @@ onBeforeUnmount(() => controller?.abort())
 
 .date--done dd {
   color: var(--brand-strong);
+}
+
+/* ── Фото ──────────────────────────────────────────────────────── */
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(150px, calc(50% - 5px)), 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tile {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+}
+
+.tile__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition:
+    opacity 0.3s var(--ease),
+    transform 0.35s var(--ease);
+}
+
+.tile__img--ready {
+  opacity: 1;
+}
+
+.tile:hover .tile__img,
+.tile:focus-visible .tile__img {
+  transform: scale(1.04);
+}
+
+.tile__day {
+  position: absolute;
+  inset: auto 0 0 0;
+  padding: 14px 10px 7px;
+  background: linear-gradient(transparent, rgb(9 13 10 / 70%));
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile__zoom {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgb(9 13 10 / 55%);
+  color: #fff;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity 0.18s var(--ease),
+    transform 0.18s var(--ease);
+}
+
+.tile:hover .tile__zoom,
+.tile:focus-visible .tile__zoom {
+  opacity: 1;
+  transform: none;
+}
+
+.tile__zoom :deep(.icon) {
+  width: 14px;
+  height: 14px;
 }
 
 /* ── Таблиці ───────────────────────────────────────────────────── */

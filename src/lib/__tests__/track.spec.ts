@@ -64,6 +64,8 @@ describe('normalizeTrack', () => {
   it('переводить відповідь API у поля сторінки', () => {
     const view = normalizeTrack(resource())
 
+    expect(view.cover).toBeNull()
+    expect(view.photos).toEqual([])
     expect(view.plannedStart).toBe('2026-06-01')
     expect(view.plannedFinish).toBe('2026-10-14')
     expect(view.readiness).toBe(0.75)
@@ -86,6 +88,36 @@ describe('normalizeTrack', () => {
     expect(view.payments).toEqual([
       { id: 5, date: '2026-08-01', amount: 100_000, received: true, note: 'Аванс' },
     ])
+  })
+
+  it('передає обкладинку з фокусом як є', () => {
+    const cover = {
+      thumb: 'https://cdn.test/t.webp',
+      card: 'https://cdn.test/c.webp',
+      hero: 'https://cdn.test/h.webp',
+      width: 1600,
+      height: 900,
+      color: '#7a8b6c',
+      focus: { x: 0.2, y: 0.7 },
+    }
+
+    expect(normalizeTrack(resource({ cover })).cover).toEqual(cover)
+  })
+
+  it('передає фото з майданчика для переглядача', () => {
+    const photos = [
+      {
+        id: 4,
+        thumb: 'https://cdn.test/4-thumb.webp',
+        full: 'https://cdn.test/4-full.webp',
+        width: 1600,
+        height: 1200,
+        color: '#8a7f6a',
+        at: '2026-08-01T10:00:00+00:00',
+      },
+    ]
+
+    expect(normalizeTrack(resource({ photos })).photos).toEqual(photos)
   })
 
   it('не показує фактичні дати, поки обʼєкт не завершено', () => {

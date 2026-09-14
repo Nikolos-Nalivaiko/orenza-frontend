@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { usePhotosStore } from './photos'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
 import type { Material, MaterialPayload, MaterialStatus } from '@/lib/materials'
@@ -19,7 +20,6 @@ import {
 } from '@/lib/services'
 import {
   buildObjectCorePayload,
-  buildObjectPayload,
   emptyObjectForm,
   normalizeClient,
   OBJECT_STATUS_LABELS,
@@ -32,41 +32,18 @@ import {
   type ObjectStatus,
 } from '@/lib/objects'
 import { buildClientPayload, type ClientForm } from '@/lib/clients'
-import { api, ApiError } from '@/lib/http'
-import { photosOf, type ObjectPhoto } from '@/lib/photos'
+import { CENTER_FOCUS, clampFocus, type CoverFocus } from '@/lib/cover'
+import { api, ApiError, upload } from '@/lib/http'
 
-const EXTRAS_KEY = 'orenza.objects.extras'
 const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
-const PHOTOS_KEY = 'orenza.objects.photos'
 
-function readStorage(key: string): string | null {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-function readList<T>(key: string, fallback: T[]): T[] {
-  try {
-    const raw = readStorage(key)
-
-    return raw === null ? fallback : (JSON.parse(raw) as T[])
-  } catch {
-    return fallback
-  }
-}
-
-/** false — записати не вдалося: приватний режим або переповнена квота. */
 function write(key: string, value: unknown): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value))
 
     return true
   } catch {
-    // Дані просто не переживуть перезавантаження. Для більшості записів це не
-    // варте окремої помилки — виняток лише фото, там про це кажемо вголос.
     return false
   }
 }
@@ -82,14 +59,6 @@ function readView(): ObjectsView {
   }
 }
 
-interface ObjectExtras {
-  cover: string | null
-}
-
-function emptyExtras(): ObjectExtras {
-  return { cover: null }
-}
-
 function merged(current: Material[], updated: Material[]): Material[] {
   const byId = new Map(updated.map((item) => [item.id, item]))
 
@@ -102,23 +71,19 @@ export const useObjectsStore = defineStore('objects', () => {
 
   const links = ref<Record<number, number | null>>({})
 
-  for (const stale of ['orenza.clients', 'orenza.objects', 'orenza.objects.activity']) {
+  for (const stale of [
+    'orenza.clients',
+    'orenza.objects',
+    'orenza.objects.activity',
+    'orenza.objects.extras',
+  ]) {
     try {
       localStorage.removeItem(stale)
     } catch {}
   }
 
-  const extras = ref<Record<number, ObjectExtras>>(readExtras())
   const items = ref<ConstructionObject[]>([])
   const clients = ref<Client[]>([])
-
-  function readExtras(): Record<number, ObjectExtras> {
-    return {}
-  }
-
-  function extrasOf(id: number): ObjectExtras {
-    return extras.value[id] ?? emptyExtras()
-  }
 
   function resolveClient(id: number | null): Client | null {
     return id === null ? null : (clients.value.find((item) => item.id === id) ?? null)
@@ -130,7 +95,6 @@ export const useObjectsStore = defineStore('objects', () => {
     return {
       ...core,
       client: core.client === null ? null : normalizeClient(core.client),
-      ...extrasOf(core.id),
     }
   }
 
@@ -140,11 +104,6 @@ export const useObjectsStore = defineStore('objects', () => {
       client: resolveClient(links.value[object.id] ?? null),
     }))
   })
-
-  const photos = ref<ObjectPhoto[]>(readList<ObjectPhoto>(PHOTOS_KEY, []))
-
-  /** Знімки не влізли у сховище — вони живуть лише до перезавантаження. */
-  const photosVolatile = ref(false)
 
   const isLoading = ref(true)
   const isOpening = ref(false)
@@ -171,23 +130,6 @@ export const useObjectsStore = defineStore('objects', () => {
     } catch {
       // див. write()
     }
-  }
-
-  function persist(): void {
-    const map: Record<number, Omit<ObjectExtras, 'cover'>> = {}
-
-    for (const item of items.value) {
-      const kept = {
-        discount_percent: item.discount_percent,
-        discount_amount: item.discount_amount,
-        payments: item.payments,
-      }
-
-      map[item.id] = kept
-      extras.value[item.id] = { cover: item.cover, ...kept }
-    }
-
-    write(EXTRAS_KEY, map)
   }
 
   function objectsPath(): string | null {
@@ -308,7 +250,6 @@ export const useObjectsStore = defineStore('objects', () => {
 
   function patch(id: number, changes: Partial<ConstructionObject>): void {
     items.value = items.value.map((item) => (item.id === id ? { ...item, ...changes } : item))
-    persist()
   }
 
   function apply(next: ConstructionObject): void {
@@ -337,34 +278,6 @@ export const useObjectsStore = defineStore('objects', () => {
       apply(before)
       error.value = clientError(cause, fallback)
     }
-  }
-
-  /* ── Фото ────────────────────────────────────────────────────── */
-
-  function nextId(rows: { id: number }[]): number {
-    return Math.max(0, ...rows.map((row) => row.id)) + 1
-  }
-
-  function objectPhotos(id: number): ObjectPhoto[] {
-    return photosOf(photos.value, id)
-  }
-
-  function persistPhotos(): void {
-    photosVolatile.value = !write(PHOTOS_KEY, photos.value)
-  }
-
-  function addPhoto(id: number, src: string, name: string): void {
-    photos.value = [
-      ...photos.value,
-      { id: nextId(photos.value), object_id: id, src, name, at: new Date().toISOString() },
-    ]
-
-    persistPhotos()
-  }
-
-  function removePhoto(photoId: number): void {
-    photos.value = photos.value.filter((photo) => photo.id !== photoId)
-    persistPhotos()
   }
 
   /* ── Точкові правки картки ───────────────────────────────────── */
@@ -867,15 +780,131 @@ export const useObjectsStore = defineStore('objects', () => {
     }
 
     items.value = items.value.filter((item) => item.id !== id)
-
-    // Разом з обʼєктом їде і все, що до нього кріпилось.
-    delete extras.value[id]
-    photos.value = photos.value.filter((photo) => photo.object_id !== id)
-
-    persist()
-    write(PHOTOS_KEY, photos.value)
+    usePhotosStore().forget(id)
 
     return true
+  }
+
+  /* ── Обкладинка ───────────────────────────────────────────────── */
+
+  const coverProgress = ref<number | null>(null)
+  const coverError = ref<string | null>(null)
+  const isSavingCover = ref(false)
+
+  function coverPath(id: number): string | null {
+    const path = objectsPath()
+
+    return path === null ? null : `${path}/${id}/cover`
+  }
+
+  function applyCover(core: ObjectCore): void {
+    const object = fromApi(core)
+
+    items.value = items.value.map((item) => (item.id === object.id ? object : item))
+  }
+
+  async function uploadCover(
+    id: number,
+    file: File,
+    focus: CoverFocus = CENTER_FOCUS,
+  ): Promise<boolean> {
+    const path = coverPath(id)
+
+    if (path === null) {
+      return false
+    }
+
+    const { x, y } = clampFocus(focus)
+    const form = new FormData()
+
+    form.append('cover', file)
+    form.append('focus_x', String(x))
+    form.append('focus_y', String(y))
+
+    coverError.value = null
+    coverProgress.value = 0
+    isSavingCover.value = true
+
+    try {
+      const updated = await progress.track(
+        upload<ObjectCore>(path, form, {
+          onProgress: (fraction) => {
+            coverProgress.value = fraction
+          },
+        }),
+      )
+
+      applyCover(updated)
+
+      return true
+    } catch (cause) {
+      coverError.value =
+        cause instanceof ApiError
+          ? (cause.fieldError('cover') ?? cause.message)
+          : 'Не вдалося завантажити обкладинку.'
+
+      return false
+    } finally {
+      coverProgress.value = null
+      isSavingCover.value = false
+    }
+  }
+
+  async function setCoverFocus(id: number, focus: CoverFocus): Promise<boolean> {
+    const path = coverPath(id)
+    const object = find(id)
+
+    if (path === null || object === null || object.cover === null) {
+      return false
+    }
+
+    const next = clampFocus(focus)
+
+    coverError.value = null
+    isSavingCover.value = true
+
+    try {
+      const updated = await progress.track(
+        api.patch<ObjectCore>(path, { focus_x: next.x, focus_y: next.y }),
+      )
+
+      applyCover(updated)
+
+      return true
+    } catch (cause) {
+      coverError.value = clientError(cause, 'Не вдалося зберегти кадрування.')
+
+      return false
+    } finally {
+      isSavingCover.value = false
+    }
+  }
+
+  async function removeCover(id: number): Promise<boolean> {
+    const path = coverPath(id)
+
+    if (path === null) {
+      return false
+    }
+
+    coverError.value = null
+    isSavingCover.value = true
+
+    try {
+      applyCover(await progress.track(api.delete<ObjectCore>(path)))
+
+      return true
+    } catch (cause) {
+      coverError.value = clientError(cause, 'Не вдалося прибрати обкладинку.')
+
+      return false
+    } finally {
+      isSavingCover.value = false
+    }
+  }
+
+  function resetCoverError(): void {
+    coverError.value = null
   }
 
   function reset(): void {
@@ -1016,18 +1045,19 @@ export const useObjectsStore = defineStore('objects', () => {
     try {
       const created = await progress.track(api.post<ObjectCore>(path, buildObjectCorePayload(form)))
 
-      const payload = buildObjectPayload(form)
+      items.value = [...items.value, fromApi(created)]
 
-      extras.value[created.id] = { cover: payload.cover ?? null }
-
-      const object = fromApi(created)
-
-      items.value = [...items.value, object]
-
-      persist()
       clearDraft()
 
-      return object
+      if (form.cover !== null) {
+        const uploaded = await uploadCover(created.id, form.cover.file, form.cover.focus)
+
+        if (!uploaded) {
+          error.value = `Обʼєкт створено, але обкладинку не завантажено: ${coverError.value ?? 'спробуйте ще раз з картки обʼєкта.'}`
+        }
+      }
+
+      return find(created.id)
     } catch (cause) {
       error.value = clientError(cause, 'Не вдалося створити обʼєкт.')
 
@@ -1115,10 +1145,13 @@ export const useObjectsStore = defineStore('objects', () => {
     setPaymentStatus,
     removePayment,
     remove,
-    photosVolatile,
-    objectPhotos,
-    addPhoto,
-    removePhoto,
+    coverProgress,
+    coverError,
+    isSavingCover,
+    uploadCover,
+    setCoverFocus,
+    removeCover,
+    resetCoverError,
     findClient,
     fetchClients,
     createClient,

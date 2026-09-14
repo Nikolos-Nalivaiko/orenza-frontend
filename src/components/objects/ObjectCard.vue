@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import CoverImage from '@/components/cover/CoverImage.vue'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
@@ -17,8 +18,12 @@ function percent(value: number): string {
   <li class="ocard">
     <!-- Обкладинка або її замінник: картки гортають очима, і якір потрібен завжди. -->
     <div class="ocard__cover">
-      <img v-if="row.object.cover" :src="row.object.cover" alt="" class="ocard__photo" />
-      <span v-else class="ocard__ghost" aria-hidden="true"><AppIcon name="building" /></span>
+      <CoverImage
+        :cover="row.object.cover"
+        :name="row.object.name"
+        variant="card"
+        sizes="(max-width: 640px) 100vw, 360px"
+      />
 
       <StatusBadge
         class="ocard__status"
@@ -108,26 +113,6 @@ function percent(value: number): string {
   position: relative;
   height: 128px;
   background: var(--paper-sunk);
-}
-
-.ocard__photo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.ocard__ghost {
-  display: grid;
-  place-items: center;
-  height: 100%;
-  background: linear-gradient(135deg, var(--brand-tint), var(--paper-sunk));
-  color: var(--brand-strong);
-}
-
-.ocard__ghost :deep(.icon) {
-  width: 34px;
-  height: 34px;
-  opacity: 0.55;
 }
 
 .ocard__status {

@@ -7,6 +7,7 @@
 
 import type { IconName } from '@/components/ui/icons'
 import { formatAmount, parseAmount } from '@/lib/amount'
+import type { CoverDraft, ObjectCover } from '@/lib/cover'
 import {
   buildPaymentPayload,
   emptyDiscount,
@@ -109,7 +110,7 @@ export interface ConstructionObject {
   finished_at: string | null
   actual_started_at: string | null
   actual_finished_at: string | null
-  cover: string | null
+  cover: ObjectCover | null
   materials: Material[]
   services: Service[]
   /** Знижка обʼєкта — рівно в тому вигляді, у якому її ввели. */
@@ -189,8 +190,7 @@ export interface ObjectForm {
   factStartDate: string
   factEndDate: string
   status: ObjectStatus
-  /** Обкладинка живе як data-URL, поки немає завантаження файлів на бекенд. */
-  cover: string | null
+  cover: CoverDraft | null
   /** Позиції матеріалів — другий блок картки. */
   materials: MaterialForm[]
   /** Роботи по обʼєкту — третій блок картки. */
@@ -208,10 +208,6 @@ export const NAME_MAX = 255
 export const ADDRESS_MIN = 5
 export const ADDRESS_MAX = 255
 export const DESCRIPTION_MAX = 2000
-
-/** Обкладинку тримаємо маленькою: вона їде в тому ж JSON, що й форма. */
-export const COVER_MAX_BYTES = 5 * 1024 * 1024
-export const COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
 
 export function emptyObjectForm(): ObjectForm {
   return {
@@ -408,7 +404,7 @@ export function hasObjectErrors(errors: ObjectErrors): boolean {
 
 /* ── Запит ─────────────────────────────────────────────────────── */
 
-export type ObjectCore = Omit<ConstructionObject, 'cover'>
+export type ObjectCore = ConstructionObject
 
 export interface ObjectCorePayload {
   name: string
@@ -468,7 +464,6 @@ export interface ObjectPayload {
   finished_at?: string
   actual_started_at?: string
   actual_finished_at?: string
-  cover?: string
   materials?: MaterialPayload[]
   services?: ServicePayload[]
   /** Знижку шлемо так, як її ввели: відсотком або сумою, але не обома одразу. */
@@ -493,7 +488,6 @@ export function buildObjectPayload(form: ObjectForm): ObjectPayload {
     ...(form.endDate === '' ? {} : { finished_at: form.endDate }),
     ...(form.factStartDate === '' ? {} : { actual_started_at: form.factStartDate }),
     ...(form.factEndDate === '' ? {} : { actual_finished_at: form.factEndDate }),
-    ...(form.cover === null ? {} : { cover: form.cover }),
     ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
     ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
     ...(off === null ? {} : percent ? { discount_percent: off } : { discount_amount: off }),

@@ -100,17 +100,79 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const payload = await parse(response)
 
   if (!response.ok) {
-    const error = (payload ?? {}) as ErrorPayload
-
-    throw new ApiError(
-      error.message ?? 'Сервер відповів помилкою.',
-      response.status,
-      error.error_code ?? 'error',
-      error.errors ?? {},
-    )
+    throw errorFrom(response.status, payload)
   }
 
   return (payload as ApiEnvelope<T> | null)?.data as T
+}
+
+function errorFrom(status: number, payload: unknown): ApiError {
+  const error = (payload ?? {}) as ErrorPayload
+
+  return new ApiError(
+    error.message ?? 'Сервер відповів помилкою.',
+    status,
+    error.error_code ?? 'error',
+    error.errors ?? {},
+  )
+}
+
+export interface UploadOptions {
+  signal?: AbortSignal
+  onProgress?: (fraction: number) => void
+}
+
+export function upload<T>(path: string, form: FormData, options: UploadOptions = {}): Promise<T> {
+  const { signal, onProgress } = options
+
+  return new Promise<T>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'))
+
+      return
+    }
+
+    const xhr = new XMLHttpRequest()
+
+    xhr.open('POST', `${API_URL}${path}`)
+    xhr.setRequestHeader('Accept', 'application/json')
+
+    if (authToken !== null) {
+      xhr.setRequestHeader('Authorization', `Bearer ${authToken}`)
+    }
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && event.total > 0) {
+        onProgress?.(event.loaded / event.total)
+      }
+    })
+
+    xhr.addEventListener('load', () => {
+      let payload: unknown = null
+
+      try {
+        payload = xhr.responseText === '' ? null : JSON.parse(xhr.responseText)
+      } catch {
+        payload = null
+      }
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(1)
+        resolve((payload as ApiEnvelope<T> | null)?.data as T)
+      } else {
+        reject(errorFrom(xhr.status, payload))
+      }
+    })
+
+    xhr.addEventListener('error', () =>
+      reject(new ApiError('Немає звʼязку із сервером.', 0, 'network')),
+    )
+    xhr.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true })
+
+    xhr.send(form)
+  })
 }
 
 export const api = {

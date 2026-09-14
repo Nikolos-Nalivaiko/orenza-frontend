@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import ObjectFacts from '@/components/objects/ObjectFacts.vue'
 import ObjectGallery from '@/components/objects/ObjectGallery.vue'
 import ObjectMoney from '@/components/objects/ObjectMoney.vue'
@@ -23,8 +22,6 @@ const emit = defineEmits<{ finance: [] }>()
 
 const objects = useObjectsStore()
 
-const photos = computed(() => objects.objectPhotos(props.object.id))
-
 async function setDescription(value: string): Promise<void> {
   await objects.setDescription(props.object.id, value)
 }
@@ -35,10 +32,6 @@ async function setDate(field: ObjectDateField, value: string): Promise<void> {
 
 async function setDiscount(percent: number | null, amount: number | null): Promise<void> {
   await objects.setDiscount(props.object.id, percent, amount)
-}
-
-function addPhoto(src: string, name: string): void {
-  objects.addPhoto(props.object.id, src, name)
 }
 </script>
 
@@ -58,13 +51,7 @@ function addPhoto(src: string, name: string): void {
     </section>
 
     <section class="card">
-      <ObjectGallery
-        :photos="photos"
-        :today="today"
-        :volatile="objects.photosVolatile"
-        @add="addPhoto"
-        @remove="objects.removePhoto"
-      />
+      <ObjectGallery :object-id="object.id" :today="today" />
     </section>
   </div>
 </template>
