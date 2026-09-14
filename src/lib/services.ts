@@ -334,7 +334,7 @@ export function buildServicePayload(service: ServiceForm): ServicePayload {
   }
 }
 
-/** Ресурс послуги у форматі майбутнього ServiceResource. */
+/** Ресурс послуги у форматі ServiceResource. */
 export interface Service {
   id: number
   name: string
@@ -387,11 +387,6 @@ export function serviceCostTotal(service: Service): number {
 
 export function serviceLineProfit(service: Service): number {
   return serviceRevenueTotal(service) - serviceCostTotal(service)
-}
-
-/** Скільки обсягу вже розписано на виконавців: решта висить нерозподіленою. */
-export function serviceAssignedVolume(service: Service): number {
-  return service.workers.reduce((sum, worker) => sum + worker.volume, 0)
 }
 
 export interface ServicesSummary {

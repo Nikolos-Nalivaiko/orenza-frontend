@@ -15,16 +15,6 @@ import { isEmail, PHONE_ERROR } from '@/lib/validation'
  */
 export type EmployeeStatus = 'active' | 'inactive'
 
-export interface EmployeeStatusOption {
-  value: EmployeeStatus
-  label: string
-}
-
-export const EMPLOYEE_STATUSES: readonly EmployeeStatusOption[] = [
-  { value: 'active', label: 'Активний' },
-  { value: 'inactive', label: 'Неактивний' },
-]
-
 export const EMPLOYEE_STATUS_LABELS: Record<EmployeeStatus, string> = {
   active: 'Активний',
   inactive: 'Неактивний',

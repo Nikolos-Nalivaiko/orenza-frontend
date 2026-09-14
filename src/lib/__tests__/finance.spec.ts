@@ -7,7 +7,6 @@ import {
   emptyDiscount,
   emptyPayment,
   financeTotals,
-  formatPayments,
   normalizeDiscount,
   hasFinanceErrors,
   isLate,
@@ -405,13 +404,5 @@ describe('sortPayments', () => {
     ])
 
     expect(rows.map((row) => row.id)).toEqual([3, 1, 4, 2, 5])
-  })
-})
-
-describe('formatPayments', () => {
-  it('узгоджує число з формою слова', () => {
-    expect(formatPayments(1)).toBe('1 платіж')
-    expect(formatPayments(3)).toBe('3 платежі')
-    expect(formatPayments(11)).toBe('11 платежів')
   })
 })

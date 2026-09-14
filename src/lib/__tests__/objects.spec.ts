@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildObjectCorePayload,
-  buildObjectPayload,
   daysBetween,
   emptyObjectForm,
   formatDay,
@@ -118,20 +117,25 @@ describe('buildObjectCorePayload', () => {
   })
 })
 
-describe('buildObjectPayload', () => {
-  it('надсилає лише заповнені поля у форматі бекенду', () => {
+describe('buildObjectCorePayload: поля обʼєкта', () => {
+  it('обрізає значення, а порожні шле як null', () => {
     expect(
-      buildObjectPayload(makeForm({ name: '  Склад №4  ', description: '  ', clientId: 3 })),
+      buildObjectCorePayload(makeForm({ name: '  Склад №4  ', description: '  ', clientId: 3 })),
     ).toEqual({
       name: 'Склад №4',
+      description: null,
       address: 'вул. Стеценка, 12 · Київ',
       client_id: 3,
       status: 'planned',
+      started_at: null,
+      finished_at: null,
+      actual_started_at: null,
+      actual_finished_at: null,
     })
   })
 
   it('перекладає дати в snake_case ключі ресурсу', () => {
-    const payload = buildObjectPayload(
+    const payload = buildObjectCorePayload(
       makeForm({
         startDate: '2026-09-01',
         endDate: '2026-12-20',
@@ -152,20 +156,22 @@ describe('buildObjectPayload', () => {
 
   it('шле знижку так, як її ввели: відсотком або сумою', () => {
     expect(
-      buildObjectPayload(makeForm({ discount: { kind: 'percent', value: '5', fromClient: true } })),
+      buildObjectCorePayload(
+        makeForm({ discount: { kind: 'percent', value: '5', fromClient: true } }),
+      ),
     ).toMatchObject({ discount_percent: 5 })
 
-    const fixed = buildObjectPayload(
+    const fixed = buildObjectCorePayload(
       makeForm({ discount: { kind: 'amount', value: '1500', fromClient: false } }),
     )
 
     expect(fixed.discount_amount).toBe(1500)
     expect(fixed.discount_percent).toBeUndefined()
-    expect(buildObjectPayload(makeForm()).discount_percent).toBeUndefined()
+    expect(buildObjectCorePayload(makeForm()).discount_percent).toBeUndefined()
   })
 
   it('додає платежі замовника, коли вони є', () => {
-    const payload = buildObjectPayload(
+    const payload = buildObjectCorePayload(
       makeForm({ payments: [{ ...emptyPayment(), name: 'Аванс', amount: '20000' }] }),
     )
 
@@ -175,7 +181,7 @@ describe('buildObjectPayload', () => {
   })
 
   it('порожній список платежів на бекенд не їде', () => {
-    expect(buildObjectPayload(makeForm()).payments).toBeUndefined()
+    expect(buildObjectCorePayload(makeForm()).payments).toBeUndefined()
   })
 })
 

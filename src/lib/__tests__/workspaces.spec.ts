@@ -3,7 +3,6 @@ import {
   buildWorkspacePayload,
   formatCreatedAt,
   monogram,
-  slugify,
   validateWorkspaceForm,
   type WorkspaceForm,
 } from '../workspaces'
@@ -11,18 +10,6 @@ import {
 function makeForm(overrides: Partial<WorkspaceForm> = {}): WorkspaceForm {
   return { type: 'company', name: 'ТОВ БудКомпанія', ...overrides }
 }
-
-describe('slugify', () => {
-  it('транслітерує кирилицю та збирає слова через дефіс', () => {
-    expect(slugify('ТОВ БудКомпанія')).toBe('tov-budkompaniya')
-    expect(slugify('  Обʼєкт №4  ')).toBe('obyekt-4')
-  })
-
-  it('не лишає дефісів по краях і тримається межі в 48 символів', () => {
-    expect(slugify('--Test--')).toBe('test')
-    expect(slugify('a'.repeat(60)).length).toBe(48)
-  })
-})
 
 describe('validateWorkspaceForm', () => {
   it('вимагає назву для компанії — як Rule::requiredIf на бекенді', () => {

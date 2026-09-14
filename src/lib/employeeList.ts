@@ -210,8 +210,3 @@ export function employeeRoles(rows: EmployeeRow[]): RoleOption[] {
     .map(([value, count]) => ({ value, count }))
     .sort((left, right) => left.value.localeCompare(right.value, 'uk'))
 }
-
-/** Скільки грошей нараховано на всіх показаних людях разом. */
-export function totalAccrued(rows: EmployeeRow[]): number {
-  return rows.reduce((sum, row) => sum + row.totals.accrued, 0)
-}

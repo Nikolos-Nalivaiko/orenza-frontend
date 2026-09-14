@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { useAuthStore } from './auth'
 import { usePhotosStore } from './photos'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
@@ -33,9 +34,9 @@ import {
 } from '@/lib/objects'
 import { buildClientPayload, type ClientForm } from '@/lib/clients'
 import { CENTER_FOCUS, clampFocus, type CoverFocus } from '@/lib/cover'
+import { objectDraftKey } from '@/lib/drafts'
 import { api, ApiError, upload } from '@/lib/http'
 
-const DRAFT_KEY = 'orenza.objects.draft'
 const VIEW_KEY = 'orenza.objects.view'
 
 function write(key: string, value: unknown): boolean {
@@ -68,6 +69,7 @@ function merged(current: Material[], updated: Material[]): Material[] {
 export const useObjectsStore = defineStore('objects', () => {
   const progress = useProgressStore()
   const workspaces = useWorkspacesStore()
+  const auth = useAuthStore()
 
   const links = ref<Record<number, number | null>>({})
 
@@ -76,6 +78,7 @@ export const useObjectsStore = defineStore('objects', () => {
     'orenza.objects',
     'orenza.objects.activity',
     'orenza.objects.extras',
+    'orenza.objects.draft',
   ]) {
     try {
       localStorage.removeItem(stale)
@@ -1069,9 +1072,19 @@ export const useObjectsStore = defineStore('objects', () => {
 
   /* ── Чернетка форми ──────────────────────────────────────────── */
 
+  function draftKey(): string | null {
+    return objectDraftKey(auth.user?.id, workspaces.currentId)
+  }
+
   function readDraft(): ObjectForm | null {
+    const key = draftKey()
+
+    if (key === null) {
+      return null
+    }
+
     try {
-      const raw = localStorage.getItem(DRAFT_KEY)
+      const raw = localStorage.getItem(key)
 
       if (raw === null) {
         return null
@@ -1096,16 +1109,25 @@ export const useObjectsStore = defineStore('objects', () => {
     }
   }
 
-  /** Обкладинку в чернетку не кладемо — вона не влізе в квоту localStorage. */
   function saveDraft(form: ObjectForm): void {
-    write(DRAFT_KEY, { ...form, cover: null })
+    const key = draftKey()
+
+    if (key !== null) {
+      write(key, { ...form, cover: null })
+    }
   }
 
   function clearDraft(): void {
+    const key = draftKey()
+
+    if (key === null) {
+      return
+    }
+
     try {
-      localStorage.removeItem(DRAFT_KEY)
+      localStorage.removeItem(key)
     } catch {
-      // див. write()
+      return
     }
   }
 

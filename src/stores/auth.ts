@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
+import { forgetObjectDrafts } from '@/lib/drafts'
 import { api, ApiError, setAuthToken } from '@/lib/http'
 import {
   buildLoginPayload,
@@ -146,6 +147,7 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     setAuthToken(null)
     writeSession(null)
+    forgetObjectDrafts()
   }
 
   function collectFieldErrors(cause: unknown): void {

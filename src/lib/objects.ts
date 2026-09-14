@@ -1,34 +1,22 @@
-/**
- * Будівельні обʼєкти. Бекенд поки має лише users/workspaces/memberships, тож
- * типи навмисно описані так, як їх віддаватиме майбутній
- * GET|POST /api/v1/workspaces/{id}/objects — щоб потім замінити лише джерело
- * даних, а не форму.
- */
-
 import type { IconName } from '@/components/ui/icons'
 import { formatAmount, parseAmount } from '@/lib/amount'
 import type { CoverDraft, ObjectCover } from '@/lib/cover'
 import {
   buildPaymentPayload,
   emptyDiscount,
-  PAYMENT_STATUS_LABELS,
   type DiscountForm,
   type Payment,
   type PaymentForm,
   type PaymentPayload,
-  type PaymentStatus,
 } from '@/lib/finance'
 import {
   buildMaterialPayload,
-  MATERIAL_BUYER_LABELS,
-  MATERIAL_STATUS_LABELS,
   type Material,
   type MaterialForm,
   type MaterialPayload,
 } from '@/lib/materials'
 import {
   buildServicePayload,
-  SERVICE_STATUS_LABELS,
   type Service,
   type ServiceForm,
   type ServicePayload,
@@ -97,7 +85,6 @@ export function normalizeClient(client: Client): Client {
   }
 }
 
-/** Ресурс обʼєкта у форматі майбутнього ObjectResource. */
 export interface ConstructionObject {
   id: number
   workspace_id: number
@@ -128,42 +115,9 @@ export interface ConstructionObject {
   created_at: string | null
 }
 
-/** 32 шістнадцяткові символи — підібрати перебором таке посилання нереально. */
-export function newPublicToken(): string {
-  const bytes = new Uint8Array(16)
-
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-    crypto.getRandomValues(bytes)
-  } else {
-    // Старий браузер без Web Crypto: посилання лишається неперебірним, хоч і
-    // слабшим. На бекенді токен усе одно вироблятиметься сервером.
-    for (let index = 0; index < bytes.length; index += 1) {
-      bytes[index] = Math.floor(Math.random() * 256)
-    }
-  }
-
-  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
-}
-
 /** Адреса публічної сторінки — відносна, домен підставляє браузер. */
 export function trackPath(token: string): string {
   return `/track/${token}`
-}
-
-/**
- * Запис, збережений до появи якогось поля, добираємо до сьогоднішньої форми:
- * інакше обʼєкт із минулої сесії лишиться без публічного посилання назавжди.
- */
-export function normalizeObject(object: ConstructionObject): ConstructionObject {
-  return {
-    ...object,
-    public_token: object.public_token ?? newPublicToken(),
-    client: object.client === null ? null : normalizeClient(object.client),
-    payments: (object.payments ?? []).map((payment) => ({
-      ...payment,
-      client_visible: payment.client_visible ?? false,
-    })),
-  }
 }
 
 /** Дати обʼєкта — пара «план» і пара «факт». Правлять їх поштучно з картки. */
@@ -417,6 +371,10 @@ export interface ObjectCorePayload {
   actual_started_at: string | null
   actual_finished_at: string | null
   materials?: MaterialPayload[]
+  services?: ServicePayload[]
+  payments?: PaymentPayload[]
+  discount_percent?: number
+  discount_amount?: number
 }
 
 export function buildObjectCorePayload(form: ObjectForm): ObjectCorePayload {
@@ -451,310 +409,4 @@ function discountPayload(discount: DiscountForm): {
   }
 
   return discount.kind === 'percent' ? { discount_percent: off } : { discount_amount: off }
-}
-
-/** Тіло запиту POST /api/v1/workspaces/{id}/objects. */
-export interface ObjectPayload {
-  name: string
-  description?: string
-  address: string
-  client_id?: number
-  status: ObjectStatus
-  started_at?: string
-  finished_at?: string
-  actual_started_at?: string
-  actual_finished_at?: string
-  materials?: MaterialPayload[]
-  services?: ServicePayload[]
-  /** Знижку шлемо так, як її ввели: відсотком або сумою, але не обома одразу. */
-  discount_percent?: number
-  discount_amount?: number
-  payments?: PaymentPayload[]
-}
-
-export function buildObjectPayload(form: ObjectForm): ObjectPayload {
-  const description = form.description.trim()
-  const discount = parseAmount(form.discount.value)
-  const percent = form.discount.kind === 'percent'
-  const off = discount === null || discount <= 0 ? null : discount
-
-  return {
-    name: form.name.trim(),
-    ...(description === '' ? {} : { description }),
-    address: form.address.trim(),
-    ...(form.clientId === null ? {} : { client_id: form.clientId }),
-    status: form.status,
-    ...(form.startDate === '' ? {} : { started_at: form.startDate }),
-    ...(form.endDate === '' ? {} : { finished_at: form.endDate }),
-    ...(form.factStartDate === '' ? {} : { actual_started_at: form.factStartDate }),
-    ...(form.factEndDate === '' ? {} : { actual_finished_at: form.factEndDate }),
-    ...(form.materials.length === 0 ? {} : { materials: form.materials.map(buildMaterialPayload) }),
-    ...(form.services.length === 0 ? {} : { services: form.services.map(buildServicePayload) }),
-    ...(off === null ? {} : percent ? { discount_percent: off } : { discount_amount: off }),
-    ...(form.payments.length === 0 ? {} : { payments: form.payments.map(buildPaymentPayload) }),
-  }
-}
-
-/* ── Демодані ──────────────────────────────────────────────────── */
-
-/** Довідника замовників ще немає — беремо тих, що вже фігурують у дашборді. */
-export const DEMO_CLIENTS: readonly Client[] = [
-  {
-    id: 9001,
-    type: { value: 'company', label: 'Компанія' },
-    name: 'ТОВ «Мегабуд»',
-    contact: 'Ірина Ковальчук',
-    phone: '+380 67 214 30 11',
-    email: 'i.kovalchuk@megabud.ua',
-    notes:
-      'Погодження тільки через Ірину. Акти приймають до 25 числа, пізніше — уже наступний місяць.',
-    discount: 5,
-  },
-  {
-    id: 9002,
-    type: { value: 'company', label: 'Компанія' },
-    name: 'ОСББ «Стеценка, 12»',
-    contact: 'Олег Дяченко',
-    phone: '+380 50 118 44 02',
-    email: 'osbb.stetsenka@gmail.com',
-    notes: '',
-    discount: 0,
-  },
-  {
-    id: 9003,
-    type: { value: 'company', label: 'Компанія' },
-    name: 'ФОП Романюк О. П.',
-    contact: 'Олександр Романюк',
-    phone: '+380 63 902 77 15',
-    email: 'romaniuk.op@ukr.net',
-    notes: 'Телефонувати після 18:00 — удень на обʼєкті. Любить фото з майданчика щотижня.',
-    discount: 3,
-  },
-  {
-    id: 9004,
-    type: { value: 'company', label: 'Компанія' },
-    name: 'ТОВ «Стальпром»',
-    contact: 'Марія Гнатюк',
-    phone: '+380 44 501 22 90',
-    email: 'm.hnatiuk@stalprom.com.ua',
-    notes: '',
-    discount: 7,
-  },
-  {
-    id: 9005,
-    type: { value: 'person', label: 'Особа' },
-    name: 'Приватний замовник',
-    contact: 'Без компанії',
-    phone: '',
-    email: '',
-    notes: '',
-    discount: 0,
-  },
-]
-
-/**
- * Демообʼєкти. Поки немає ендпоінта, порожній простір показував би порожній
- * список — а він якраз і має пояснити, як екран виглядає в роботі. Id з
- * власного діапазону: у сховище вони не пишуться й не займають місце
- * створеним обʼєктам.
- */
-export const DEMO_OBJECT_ID_FROM = 9000
-
-export function isDemoObject(id: number): boolean {
-  return id >= DEMO_OBJECT_ID_FROM
-}
-
-export function demoClient(id: number): Client | null {
-  return DEMO_CLIENTS.find((item) => item.id === id) ?? null
-}
-
-function status(value: ObjectStatus): { value: ObjectStatus; label: string } {
-  return { value, label: OBJECT_STATUS_LABELS[value] }
-}
-
-function material(
-  id: number,
-  name: string,
-  unit: string,
-  quantity: number,
-  cost: number,
-  price: number,
-): Material {
-  return {
-    id,
-    name,
-    unit,
-    quantity,
-    buyer: { value: 'contractor', label: MATERIAL_BUYER_LABELS.contractor },
-    cost_price: cost,
-    client_price: price,
-    status: { value: 'delivered', label: MATERIAL_STATUS_LABELS.delivered },
-    approved_by_client: true,
-  }
-}
-
-function service(
-  id: number,
-  name: string,
-  unit: string,
-  planned: number,
-  actual: number | null,
-  price: number,
-  wage: number,
-): Service {
-  const done = actual !== null && actual >= planned
-
-  return {
-    id,
-    name,
-    description: null,
-    unit,
-    planned_volume: planned,
-    actual_volume: actual,
-    client_price: price,
-    status: done
-      ? { value: 'done', label: SERVICE_STATUS_LABELS.done }
-      : { value: 'in_progress', label: SERVICE_STATUS_LABELS.in_progress },
-    workers: [{ employee_id: id, volume: actual ?? planned, rate: wage }],
-  }
-}
-
-function payment(
-  id: number,
-  name: string,
-  amount: number,
-  value: PaymentStatus,
-  paidAt: string | null,
-): Payment {
-  return {
-    id,
-    name,
-    description: null,
-    amount,
-    status: { value, label: PAYMENT_STATUS_LABELS[value] },
-    paid_at: paidAt,
-    // У демоплатежів підписи нейтральні — їх не соромно показати замовнику.
-    client_visible: true,
-  }
-}
-
-export function demoObjects(workspaceId: number): ConstructionObject[] {
-  return [
-    {
-      id: 9001,
-      workspace_id: workspaceId,
-      name: 'ЖК «Пасаж», 3 черга',
-      description: 'Монолітний каркас і зовнішні стіни третьої черги.',
-      address: 'вул. Стеценка, 12 · Київ',
-      client: demoClient(9001),
-      status: status('in_progress'),
-      started_at: '2026-06-02',
-      finished_at: '2026-10-14',
-      actual_started_at: '2026-06-08',
-      actual_finished_at: null,
-      cover: null,
-      materials: [material(1, 'Бетон В25', 'м³', 320, 3100, 3600)],
-      services: [service(1, 'Монолітні роботи', 'м³', 320, 214, 1450, 620)],
-      discount_percent: 5,
-      discount_amount: null,
-      payments: [
-        payment(1, 'Аванс за етап', 600_000, 'paid', '2026-06-10'),
-        payment(2, 'Транш за липень', 340_000, 'pending', '2026-09-20'),
-      ],
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: '2026-06-01T09:00:00.000Z',
-    },
-    {
-      id: 9002,
-      workspace_id: workspaceId,
-      name: 'Котеджне містечко «Липки»',
-      description: null,
-      address: 'с. Гатне · Київська обл.',
-      client: demoClient(9003),
-      status: status('in_progress'),
-      started_at: '2026-05-12',
-      finished_at: '2026-08-28',
-      actual_started_at: '2026-05-20',
-      actual_finished_at: null,
-      cover: null,
-      materials: [material(1, 'Металочерепиця', 'м²', 1400, 420, 520)],
-      services: [service(1, 'Покрівельні роботи', 'м²', 1400, 580, 380, 160)],
-      discount_percent: 3,
-      discount_amount: null,
-      payments: [payment(1, 'Аванс', 300_000, 'paid', '2026-05-18')],
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: '2026-05-08T11:20:00.000Z',
-    },
-    {
-      id: 9003,
-      workspace_id: workspaceId,
-      name: 'Офіс «Кварц», 4 поверх',
-      description: null,
-      address: 'просп. Науки, 54 · Харків',
-      client: demoClient(9002),
-      status: status('paused'),
-      started_at: '2026-07-01',
-      finished_at: '2026-09-28',
-      actual_started_at: '2026-07-06',
-      actual_finished_at: null,
-      cover: null,
-      materials: [material(1, 'Гіпсокартон', 'лист', 460, 340, 390)],
-      services: [service(1, 'Оздоблення', 'м²', 240, 96, 640, 320)],
-      discount_percent: null,
-      discount_amount: null,
-      payments: [payment(1, 'Аванс', 120_000, 'paid', '2026-07-04')],
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: '2026-06-28T08:40:00.000Z',
-    },
-    {
-      id: 9004,
-      workspace_id: workspaceId,
-      name: 'Реконструкція складу №4',
-      description: null,
-      address: 'вул. Промислова, 8 · Львів',
-      client: demoClient(9004),
-      status: status('done'),
-      started_at: '2026-03-04',
-      finished_at: '2026-08-19',
-      actual_started_at: '2026-03-11',
-      actual_finished_at: '2026-08-21',
-      cover: null,
-      materials: [material(1, 'Профнастил', 'м²', 900, 310, 380)],
-      services: [service(1, 'Демонтаж і монтаж', 'м²', 900, 900, 260, 110)],
-      discount_percent: 7,
-      discount_amount: null,
-      payments: [
-        payment(1, 'Аванс', 200_000, 'paid', '2026-03-06'),
-        payment(2, 'Розрахунок після здачі', 335_000, 'paid', '2026-08-25'),
-      ],
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: '2026-03-02T10:10:00.000Z',
-    },
-    {
-      id: 9005,
-      workspace_id: workspaceId,
-      name: 'Ремонт покрівлі школи №12',
-      description: null,
-      address: 'вул. Шкільна, 4 · Бровари',
-      client: null,
-      status: status('planned'),
-      started_at: '2026-10-05',
-      finished_at: '2026-11-30',
-      actual_started_at: null,
-      actual_finished_at: null,
-      cover: null,
-      materials: [],
-      services: [],
-      discount_percent: null,
-      discount_amount: null,
-      payments: [],
-      public_token: newPublicToken(),
-      archived_at: null,
-      created_at: '2026-08-30T14:05:00.000Z',
-    },
-  ]
 }

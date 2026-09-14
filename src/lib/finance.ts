@@ -334,7 +334,7 @@ export function buildPaymentPayload(payment: PaymentForm): PaymentPayload {
 }
 
 /**
- * Ресурс платежу у форматі майбутнього PaymentResource.
+ * Ресурс платежу у форматі PaymentResource.
  *
  * `paid_at` — дата платежу в обидві сторони: коли гроші прийшли, якщо він
  * оплачений, і коли їх чекають, якщо він ще в очікуванні. Другого поля під
@@ -541,15 +541,4 @@ export function comparePayments(left: Payment, right: Payment): number {
 
 export function sortPayments(payments: Payment[]): Payment[] {
   return [...payments].sort(comparePayments)
-}
-
-/** 1 платіж, 2–4 платежі, 5+ платежів. */
-export function formatPayments(count: number): string {
-  const tail = count % 100 >= 11 && count % 100 <= 14 ? 0 : count % 10
-
-  if (tail === 1) {
-    return `${count} платіж`
-  }
-
-  return tail >= 2 && tail <= 4 ? `${count} платежі` : `${count} платежів`
 }

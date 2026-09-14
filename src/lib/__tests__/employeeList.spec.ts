@@ -7,7 +7,6 @@ import {
   employeeRows,
   isDefaultEmployeeFilters,
   matchesEmployeeQuery,
-  totalAccrued,
   type EmployeeFilters,
 } from '../employeeList'
 import type { Employee } from '../employees'
@@ -198,7 +197,6 @@ describe('countEmployees і employeeRoles', () => {
 
   it('рахує активних, неактивних, вільних і зайнятих', () => {
     expect(countEmployees(rows)).toEqual({ all: 3, active: 2, inactive: 1, free: 1, busy: 1 })
-    expect(totalAccrued(rows)).toBe(40_000)
   })
 
   it('збирає спеціальності, які справді є', () => {

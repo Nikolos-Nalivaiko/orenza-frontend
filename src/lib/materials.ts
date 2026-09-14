@@ -5,9 +5,6 @@
  *   різниця між ними й дає профіт;
  * • купує клієнт напряму — грошей ми не рухаємо, тож цін немає взагалі,
  *   позиція лише фіксує, що матеріал на обʼєкті.
- *
- * Типи описані так, як їх віддаватиме майбутній
- * GET|POST /api/v1/objects/{id}/materials.
  */
 
 import type { IconName } from '@/components/ui/icons'
@@ -253,7 +250,7 @@ export function buildMaterialPayload(material: MaterialForm): MaterialPayload {
   }
 }
 
-/** Ресурс позиції у форматі майбутнього MaterialResource. */
+/** Ресурс позиції у форматі MaterialResource. */
 export interface Material {
   id: number
   name: string

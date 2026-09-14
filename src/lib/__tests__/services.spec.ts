@@ -6,7 +6,6 @@ import {
   emptyServiceWorker,
   filterServices,
   formatWorks,
-  serviceAssignedVolume,
   serviceCost,
   serviceCostTotal,
   serviceLineProfit,
@@ -211,7 +210,6 @@ describe('гроші по збереженій роботі', () => {
     })
 
     expect(serviceCostTotal(row)).toBe(80 * 90 + 40 * 70)
-    expect(serviceAssignedVolume(row)).toBe(120)
     expect(serviceLineProfit(row)).toBe(120 * 210 - (80 * 90 + 40 * 70))
   })
 })
