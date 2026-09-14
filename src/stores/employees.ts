@@ -1,144 +1,244 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
+import { useWorkspacesStore } from './workspaces'
 import {
   buildEmployeePayload,
-  DEMO_EMPLOYEES,
   normalizeEmployee,
   type Employee,
   type EmployeeForm,
   type EmployeeStatus,
 } from '@/lib/employees'
-
-/**
- * Співробітники простору. Ендпоінта ще немає — список приходить із демоданих,
- * але через ту саму асинхронну загрузку, що й у решти довідників.
- *
- * Правки з картки живуть у localStorage: структура записів і правила ті самі,
- * що поїдуть на бекенд, тож зміниться лише джерело.
- */
-const STORAGE_KEY = 'orenza.employees'
-
-function readList(): Employee[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-
-    return raw === null ? [] : (JSON.parse(raw) as Employee[])
-  } catch {
-    return []
-  }
-}
-
-function write(items: Employee[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
-  } catch {
-    // Приватний режим або переповнена квота: правка просто не переживе
-    // перезавантаження — окремої помилки це не варте.
-  }
-}
+import { api, ApiError } from '@/lib/http'
 
 export const useEmployeesStore = defineStore('employees', () => {
   const progress = useProgressStore()
+  const workspaces = useWorkspacesStore()
 
   const items = ref<Employee[]>([])
 
-  // Поки нічого не питали, список вважаємо таким, що вантажиться: інакше
-  // селект встиг би блимнути порожнім станом.
   const isLoading = ref(true)
+  const isSaving = ref(false)
+  const loaded = ref(false)
+  const error = ref<string | null>(null)
+
+  function employeesPath(): string | null {
+    const slug = workspaces.current?.slug
+
+    if (slug === undefined || !workspaces.hasTeam) {
+      return null
+    }
+
+    return `/workspaces/${slug}/employees`
+  }
+
+  function message(cause: unknown, fallback: string): string {
+    return cause instanceof ApiError ? cause.message : fallback
+  }
 
   function find(id: number | null): Employee | null {
     return id === null ? null : (items.value.find((item) => item.id === id) ?? null)
   }
 
-  async function fetchEmployees(): Promise<void> {
+  function apply(next: Employee): void {
+    const known = find(next.id) !== null
+
+    items.value = known
+      ? items.value.map((item) => (item.id === next.id ? next : item))
+      : [...items.value, next]
+  }
+
+  async function load(): Promise<void> {
+    const path = employeesPath()
+
+    if (path === null) {
+      items.value = []
+      isLoading.value = false
+      loaded.value = true
+
+      return
+    }
+
     isLoading.value = true
+    error.value = null
 
     try {
-      // TODO: GET /api/v1/workspaces/{id}/employees
-      await progress.track(new Promise((resolve) => setTimeout(resolve, 380)))
+      const list = await progress.track(api.get<Employee[]>(path))
 
-      const stored = readList().map(normalizeEmployee)
-
-      // Демолюди сіються один раз — далі це звичайні записи, яким правлять
-      // контакти й статус нарівні з власними.
-      const seeded = DEMO_EMPLOYEES.filter((demo) => !stored.some((item) => item.id === demo.id))
-
-      items.value = [...seeded, ...stored].sort((left, right) => left.id - right.id)
-
-      if (seeded.length > 0) {
-        write(items.value)
+      if (employeesPath() !== path) {
+        return
       }
+
+      items.value = list.map(normalizeEmployee)
+    } catch (cause) {
+      error.value = message(cause, 'Не вдалося завантажити співробітників.')
     } finally {
-      // Навіть якщо запит впаде, селект не має лишитись у скелетоні назавжди.
+      isLoading.value = false
+      loaded.value = true
+    }
+  }
+
+  let pending: Promise<void> | null = null
+
+  function fetchEmployees(): Promise<void> {
+    pending ??= load().finally(() => {
+      pending = null
+    })
+
+    return pending
+  }
+
+  async function fetchEmployee(id: number): Promise<void> {
+    const path = employeesPath()
+
+    if (path === null) {
+      isLoading.value = false
+
+      return
+    }
+
+    error.value = null
+
+    try {
+      const employee = await progress.track(api.get<Employee>(`${path}/${id}`))
+
+      apply(normalizeEmployee(employee))
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 404) {
+        items.value = items.value.filter((item) => item.id !== id)
+
+        return
+      }
+
+      error.value = message(cause, 'Не вдалося відкрити картку співробітника.')
+    } finally {
       isLoading.value = false
     }
   }
 
-  /**
-   * Людину заводять двома шляхами: повною формою з довідника й одним іменем
-   * прямо з бригади на роботі. Запис виходить той самий — різниться лише те,
-   * скільки про людину відомо на момент створення.
-   */
-  function createEmployee(form: EmployeeForm): Employee {
-    const employee: Employee = {
-      // TODO: POST /api/v1/workspaces/{id}/employees — id віддасть бекенд.
-      id: Math.max(100, ...items.value.map((item) => item.id)) + 1,
-      ...buildEmployeePayload(form),
-      status: 'active',
-      notes: '',
-      created_at: new Date().toISOString(),
+  watch(
+    () => workspaces.currentId,
+    () => {
+      items.value = []
+      error.value = null
+      loaded.value = false
+      isLoading.value = true
+
+      pending = null
+
+      void fetchEmployees()
+    },
+  )
+
+  async function createEmployee(form: EmployeeForm): Promise<Employee | null> {
+    const path = employeesPath()
+
+    if (path === null) {
+      error.value = 'В особистому просторі команди немає.'
+
+      return null
     }
 
-    items.value = [...items.value, employee]
-    write(items.value)
+    isSaving.value = true
+    error.value = null
 
-    return employee
+    try {
+      const created = await progress.track(api.post<Employee>(path, buildEmployeePayload(form)))
+      const employee = normalizeEmployee(created)
+
+      items.value = [...items.value, employee]
+
+      return employee
+    } catch (cause) {
+      error.value = message(cause, 'Не вдалося додати співробітника.')
+
+      return null
+    } finally {
+      isSaving.value = false
+    }
   }
 
-  /** Нового виконавця заводять прямо з бригади — щоб не кидати введене. */
-  function addEmployee(name: string): Employee {
-    return createEmployee({ name, role: '', crew: '', phone: '', email: '' })
+  function addEmployee(name: string): Promise<Employee | null> {
+    return createEmployee({ name, role: '', phone: '', email: '' })
   }
 
-  function patch(id: number, changes: Partial<Employee>): void {
-    const employee = find(id)
+  async function patch(
+    id: number,
+    changes: Record<string, unknown>,
+    fallback: string,
+  ): Promise<void> {
+    const path = employeesPath()
+    const before = find(id)
 
-    if (employee === null) {
+    if (path === null || before === null) {
       return
     }
 
-    items.value = items.value.map((item) => (item.id === id ? { ...item, ...changes } : item))
-    write(items.value)
+    error.value = null
+
+    try {
+      const updated = await progress.track(api.patch<Employee>(`${path}/${id}`, changes))
+
+      apply(normalizeEmployee(updated))
+    } catch (cause) {
+      apply(before)
+      error.value = message(cause, fallback)
+    }
   }
 
-  /** Контакти й спеціальність — те, за чим людину впізнають і набирають. */
-  function updateEmployee(id: number, form: EmployeeForm): void {
-    patch(id, buildEmployeePayload(form))
+  async function updateEmployee(id: number, form: EmployeeForm): Promise<void> {
+    await patch(id, { ...buildEmployeePayload(form) }, 'Не вдалося зберегти зміни.')
   }
 
-  /**
-   * Людина пішла чи у відпустці — вона не зникає, а стає неактивною: історія
-   * робіт і нарахувань лишається, у нові бригади її просто не пропонують.
-   */
-  function setEmployeeStatus(id: number, status: EmployeeStatus): void {
-    patch(id, { status })
+  async function setEmployeeStatus(id: number, status: EmployeeStatus): Promise<void> {
+    await patch(id, { status }, 'Не вдалося змінити статус.')
   }
 
-  /** Опис людини: як із нею працювати. Один текст, а не стрічка подій. */
-  function setEmployeeNotes(id: number, notes: string): void {
-    patch(id, { notes: notes.trim() })
+  async function setEmployeeNotes(id: number, notes: string): Promise<void> {
+    await patch(id, { notes: notes.trim() }, 'Не вдалося зберегти опис.')
+  }
+
+  async function removeEmployee(id: number): Promise<boolean> {
+    const path = employeesPath()
+
+    if (path === null) {
+      return false
+    }
+
+    error.value = null
+
+    try {
+      await progress.track(api.delete(`${path}/${id}`))
+    } catch (cause) {
+      error.value = message(cause, 'Не вдалося видалити співробітника.')
+
+      return false
+    }
+
+    items.value = items.value.filter((item) => item.id !== id)
+
+    return true
+  }
+
+  function reset(): void {
+    error.value = null
   }
 
   return {
     items,
     isLoading,
+    isSaving,
+    loaded,
+    error,
     find,
+    reset,
     fetchEmployees,
+    fetchEmployee,
     createEmployee,
     addEmployee,
     updateEmployee,
     setEmployeeStatus,
     setEmployeeNotes,
+    removeEmployee,
   }
 })

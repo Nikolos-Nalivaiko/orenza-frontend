@@ -20,7 +20,7 @@ const root = useTemplateRef<HTMLElement>('root')
 
 onMounted(() => {
   // У приватному просторі виконавців немає — довідник там ні до чого.
-  if (!props.solo && employees.items.length === 0) {
+  if (!props.solo && !employees.loaded) {
     void employees.fetchEmployees()
   }
 })

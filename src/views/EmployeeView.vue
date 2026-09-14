@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import EmployeeFacts from '@/components/employees/EmployeeFacts.vue'
 import EmployeeHeader from '@/components/employees/EmployeeHeader.vue'
@@ -38,42 +38,50 @@ const totals = computed(() => payrollTotals(charges.value, today))
 
 const loading = computed(() => employees.isLoading || objects.isLoading)
 
+const missing = computed(
+  () => !loading.value && employees.error === null && employee.value === null,
+)
+
 const tabs = computed<{ key: TabKey; label: string; count: number | null }[]>(() => [
   { key: 'overview', label: 'Огляд', count: null },
   { key: 'objects', label: 'Обʼєкти', count: totals.value.objects },
   { key: 'payroll', label: 'Фінанси', count: null },
 ])
 
-onMounted(() => {
-  // Картку відкривають і прямим посиланням — тоді ще не їхало ні те, ні те.
-  if (employees.items.length === 0) {
-    void employees.fetchEmployees()
-  }
+watch(id, (value) => void employees.fetchEmployee(value), { immediate: true })
 
+onMounted(() => {
   if (!objects.loaded) {
     void objects.fetchObjects()
   }
 })
 
-function save(form: EmployeeForm): void {
-  employees.updateEmployee(id.value, form)
+async function save(form: EmployeeForm): Promise<void> {
+  await employees.updateEmployee(id.value, form)
 }
 
-function setStatus(active: boolean): void {
-  employees.setEmployeeStatus(id.value, active ? 'active' : 'inactive')
+async function setStatus(active: boolean): Promise<void> {
+  await employees.setEmployeeStatus(id.value, active ? 'active' : 'inactive')
 }
 
-function setNotes(notes: string): void {
-  employees.setEmployeeNotes(id.value, notes)
+async function setNotes(notes: string): Promise<void> {
+  await employees.setEmployeeNotes(id.value, notes)
 }
 </script>
 
 <template>
   <div class="employee">
+    <p v-if="employees.error" class="failed" role="alert">
+      <span>{{ employees.error }}</span>
+      <button type="button" class="failed__retry" @click="employees.fetchEmployee(id)">
+        Оновити
+      </button>
+    </p>
+
     <p v-if="loading && employee === null" class="loading">Відкриваємо картку співробітника…</p>
 
     <!-- Людини немає: чужий простір, видалений запис або друкарка в адресі. -->
-    <section v-else-if="employee === null" class="missing">
+    <section v-else-if="missing" class="missing">
       <span class="missing__icon" aria-hidden="true"><AppIcon name="alert" /></span>
       <h1 class="display missing__title">Такого співробітника немає</h1>
       <p class="missing__text">Можливо, його видалили або він належить іншому робочому простору.</p>
@@ -82,7 +90,7 @@ function setNotes(notes: string): void {
       </RouterLink>
     </section>
 
-    <template v-else>
+    <template v-else-if="employee !== null">
       <EmployeeHeader
         :employee="employee"
         :totals="totals"
@@ -134,6 +142,31 @@ function setNotes(notes: string): void {
   padding: 40px 0;
   font-size: 13.5px;
   color: var(--ink-faint);
+}
+
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failed__retry {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 /* ── Вкладки ───────────────────────────────────────────────────── */

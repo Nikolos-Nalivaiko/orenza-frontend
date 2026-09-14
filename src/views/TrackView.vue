@@ -1,43 +1,59 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import PhotoViewer from '@/components/objects/PhotoViewer.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
 import { DUE_STATE_LABELS } from '@/lib/finance'
-import { formatDay, todayIso } from '@/lib/objects'
-import { trackObject } from '@/lib/track'
-import { useObjectsStore } from '@/stores/objects'
+import { ApiError } from '@/lib/http'
+import { formatDay } from '@/lib/objects'
+import { fetchTrack, type TrackObject } from '@/lib/track'
 
 /**
  * Публічна сторінка обʼєкта: замовник відкриває її за посиланням, без входу
  * й без реєстрації. Нічого редагувати тут не можна — це вітрина ходу робіт.
  *
- * Що саме сюди потрапляє, вирішує lib/track: собівартості, виконавців і
- * внутрішніх коментарів у цьому екрані немає навіть у даних.
+ * Що саме сюди потрапляє, вирішує бекенд: собівартості, виконавців і
+ * внутрішніх коментарів у відповіді немає взагалі.
  */
 
 const route = useRoute()
-const objects = useObjectsStore()
-
-/** День фіксуємо на час життя екрана: прострочення не має мигати опівночі. */
-const today = todayIso()
 
 const token = computed(() => String(route.params.token ?? ''))
 
-const object = computed(() => objects.findByToken(token.value))
+const view = ref<TrackObject | null>(null)
+const isLoading = ref(true)
+const missing = ref(false)
+const error = ref<string | null>(null)
 
-const view = computed(() => (object.value === null ? null : trackObject(object.value, today)))
+let controller: AbortController | null = null
 
-const photos = computed(() => (object.value === null ? [] : objects.objectPhotos(object.value.id)))
+async function load(): Promise<void> {
+  controller?.abort()
+  controller = new AbortController()
 
-/** Індекс відкритого знімка; null — переглядач закритий. */
-const viewing = ref<number | null>(null)
+  const { signal } = controller
 
-function openPhoto(index: number): void {
-  if (photos.value.length > 0) {
-    viewing.value = index
+  isLoading.value = true
+  missing.value = false
+  error.value = null
+
+  try {
+    view.value = await fetchTrack(token.value, signal)
+  } catch (cause) {
+    if (signal.aborted) {
+      return
+    }
+
+    view.value = null
+
+    if (cause instanceof ApiError && cause.status === 404) {
+      missing.value = true
+    } else {
+      error.value = cause instanceof ApiError ? cause.message : 'Не вдалося відкрити сторінку.'
+    }
   }
+
+  isLoading.value = false
 }
 
 const percent = computed(() =>
@@ -50,20 +66,25 @@ const paidPercent = computed(() =>
   view.value === null ? 0 : Math.round(view.value.money.progress * 100),
 )
 
-onMounted(() => {
-  if (!objects.loaded) {
-    void objects.fetchTrack()
-  }
-})
+watch(token, () => void load(), { immediate: true })
+
+onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
   <div class="track">
-    <p v-if="objects.isLoading" class="state">Відкриваємо сторінку обʼєкта…</p>
+    <p v-if="isLoading" class="state">Відкриваємо сторінку обʼєкта…</p>
+
+    <section v-else-if="error !== null" class="state state--missing" role="alert">
+      <span class="state__icon" aria-hidden="true"><AppIcon name="alert" /></span>
+      <h1 class="display state__title">Не вдалося відкрити сторінку</h1>
+      <p class="state__text">{{ error }}</p>
+      <button type="button" class="state__retry" @click="load">Спробувати ще раз</button>
+    </section>
 
     <!-- Посилання не працює: обʼєкт видалили або токен набрали з помилкою.
          Що саме сталось — не кажемо: це сторонній відвідувач. -->
-    <section v-else-if="view === null" class="state state--missing">
+    <section v-else-if="missing || view === null" class="state state--missing">
       <span class="state__icon" aria-hidden="true"><AppIcon name="alert" /></span>
       <h1 class="display state__title">Сторінка недоступна</h1>
       <p class="state__text">
@@ -81,13 +102,6 @@ onMounted(() => {
           <span class="shot__status" :class="`shot__status--${view.status.value}`">
             {{ view.status.label }}
           </span>
-
-          <!-- Знімки відкриваються прямо з обкладинки: саме по них сюди й
-               заходять найчастіше. -->
-          <button v-if="photos.length > 0" type="button" class="shot__more" @click="openPhoto(0)">
-            <AppIcon name="image" />
-            {{ photos.length }} фото
-          </button>
         </div>
 
         <div class="intro">
@@ -148,28 +162,6 @@ onMounted(() => {
             </div>
           </template>
         </dl>
-      </section>
-
-      <section v-if="photos.length > 0" class="card">
-        <div class="card__head">
-          <h2 class="card__title">Фото з майданчика</h2>
-          <p class="card__hint">Натисніть, щоб роздивитись</p>
-        </div>
-
-        <ul class="gallery">
-          <li v-for="(photo, index) in photos" :key="photo.id">
-            <button
-              type="button"
-              class="tile"
-              :aria-label="`Відкрити фото: ${photo.name}`"
-              @click="openPhoto(index)"
-            >
-              <img class="tile__img" :src="photo.src" :alt="photo.name" loading="lazy" />
-
-              <span class="tile__zoom" aria-hidden="true"><AppIcon name="search" /></span>
-            </button>
-          </li>
-        </ul>
       </section>
 
       <section v-if="view.services.length > 0" class="card">
@@ -304,16 +296,6 @@ onMounted(() => {
         </p>
         <p class="foot__brand">Orenza</p>
       </footer>
-
-      <!-- Той самий переглядач, що й у картці обʼєкта, але без видалення. -->
-      <PhotoViewer
-        v-if="viewing !== null"
-        :photos="photos"
-        :index="viewing"
-        :removable="false"
-        @move="viewing = $event"
-        @close="viewing = null"
-      />
     </template>
   </div>
 </template>
@@ -364,6 +346,21 @@ onMounted(() => {
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--ink-muted);
+}
+
+.state__retry {
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper-sunk);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: background-color 0.18s var(--ease);
+}
+
+.state__retry:hover {
+  background: var(--line);
 }
 
 /* ── Шапка ─────────────────────────────────────────────────────── */
@@ -424,36 +421,6 @@ onMounted(() => {
   color: #fff;
 }
 
-.shot__more {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 15px;
-  border: 0;
-  border-radius: 999px;
-  background: rgb(9 13 10 / 62%);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 600;
-  backdrop-filter: blur(6px);
-  transition:
-    background-color 0.18s var(--ease),
-    transform 0.18s var(--ease);
-}
-
-.shot__more:hover {
-  background: rgb(9 13 10 / 80%);
-  transform: translateY(-1px);
-}
-
-.shot__more :deep(.icon) {
-  width: 15px;
-  height: 15px;
-}
-
 .intro {
   display: grid;
   gap: 8px;
@@ -496,23 +463,10 @@ onMounted(() => {
   background: var(--paper-raised);
 }
 
-.card__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-
 .card__title {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.01em;
-}
-
-.card__hint {
-  font-size: 11.5px;
-  color: var(--ink-faint);
 }
 
 .card__sub {
@@ -602,71 +556,6 @@ onMounted(() => {
 
 .date--done dd {
   color: var(--brand-strong);
-}
-
-/* ── Фото ──────────────────────────────────────────────────────── */
-
-.gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.tile {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  padding: 0;
-  border: 0;
-  border-radius: var(--r-md);
-  background: var(--paper-sunk);
-}
-
-.tile__img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.35s var(--ease);
-}
-
-.tile:hover .tile__img,
-.tile:focus-visible .tile__img {
-  transform: scale(1.04);
-}
-
-/* Значок лупи — єдиний натяк, що знімок відкривається на весь екран. */
-.tile__zoom {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgb(9 13 10 / 55%);
-  color: #fff;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 0.18s var(--ease),
-    transform 0.18s var(--ease);
-}
-
-.tile:hover .tile__zoom,
-.tile:focus-visible .tile__zoom {
-  opacity: 1;
-  transform: none;
-}
-
-.tile__zoom :deep(.icon) {
-  width: 14px;
-  height: 14px;
 }
 
 /* ── Таблиці ───────────────────────────────────────────────────── */

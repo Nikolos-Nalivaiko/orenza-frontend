@@ -306,19 +306,6 @@ export const useObjectsStore = defineStore('objects', () => {
     return request
   }
 
-  /**
-   * Публічна сторінка знаходить обʼєкт лише за токеном: id туди не потрапляє
-   * взагалі, тож і перебирати нічого.
-   */
-  function findByToken(token: string): ConstructionObject | null {
-    return items.value.find((item) => item.public_token === token) ?? null
-  }
-
-  async function fetchTrack(): Promise<void> {
-    isLoading.value = false
-    loaded.value = true
-  }
-
   function patch(id: number, changes: Partial<ConstructionObject>): void {
     items.value = items.value.map((item) => (item.id === id ? { ...item, ...changes } : item))
     persist()
@@ -1108,9 +1095,7 @@ export const useObjectsStore = defineStore('objects', () => {
     setView,
     fetchObjects,
     fetchObject,
-    fetchTrack,
     find,
-    findByToken,
     setStatus,
     setArchived,
     setDescription,

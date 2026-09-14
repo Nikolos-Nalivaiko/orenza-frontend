@@ -10,7 +10,7 @@ interface SiteCard {
   stage: string
   progress: number
   budget: string
-  crew: string
+  team: string
 }
 
 const sites: SiteCard[] = [
@@ -20,7 +20,7 @@ const sites: SiteCard[] = [
     stage: 'Монолітні роботи',
     progress: 68,
     budget: '2,4 млн ₴',
-    crew: 'Бригада №3 · 9 осіб',
+    team: '9 виконавців на обʼєкті',
   },
   {
     name: 'Котеджне містечко «Липки»',
@@ -28,7 +28,7 @@ const sites: SiteCard[] = [
     stage: 'Покрівля',
     progress: 41,
     budget: '1,1 млн ₴',
-    crew: 'Бригада №1 · 6 осіб',
+    team: '6 виконавців на обʼєкті',
   },
   {
     name: 'Реконструкція складу №4',
@@ -36,7 +36,7 @@ const sites: SiteCard[] = [
     stage: 'Оздоблення',
     progress: 87,
     budget: '860 тис ₴',
-    crew: 'Підряд «Стальпром»',
+    team: 'Підряд «Стальпром»',
   },
 ]
 
@@ -117,7 +117,7 @@ const acts = useCountUp(37)
           <div class="card__meta">
             <span>{{ active.budget }}</span>
             <span class="card__sep" aria-hidden="true">·</span>
-            <span>{{ active.crew }}</span>
+            <span>{{ active.team }}</span>
           </div>
         </div>
       </Transition>

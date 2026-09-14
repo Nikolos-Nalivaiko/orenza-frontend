@@ -1,25 +1,72 @@
-/**
- * Публічна сторінка обʼєкта — те, що бачить замовник за посиланням.
- *
- * Це єдине місце, де вирішується, що саме виходить із контори назовні, тож
- * воно навмисно зроблене окремим шаром: не «сховати колонку в шаблоні», а
- * зібрати новий об'єкт, у якому чутливих полів немає взагалі. Собівартість,
- * закупівельні ціни, виконавці, їхні ставки й внутрішні коментарі до
- * публічного типу просто не входять — їх не можна показати випадково.
- */
-
-import { dueState, objectFinance, type DueState } from '@/lib/finance'
+import type { DueState } from '@/lib/finance'
+import { api } from '@/lib/http'
 import type { MaterialStatus } from '@/lib/materials'
-import type { ConstructionObject } from '@/lib/objects'
-import { readiness, servicesDone } from '@/lib/objectList'
-import { serviceRevenueTotal, type ServiceStatus } from '@/lib/services'
+import type { ObjectStatus } from '@/lib/objects'
+import type { ServiceStatus } from '@/lib/services'
+
+interface Labeled<T extends string> {
+  value: T
+  label: string
+}
+
+export interface TrackMaterialResource {
+  id: number
+  name: string
+  quantity: number
+  unit: string
+  status: Labeled<MaterialStatus>
+}
+
+export interface TrackServiceResource {
+  id: number
+  name: string
+  description: string | null
+  unit: string
+  planned_volume: number
+  actual_volume: number | null
+  status: Labeled<ServiceStatus>
+  total: number
+}
+
+export interface TrackPaymentResource {
+  id: number
+  date: string | null
+  amount: number
+  received: boolean
+  note: string | null
+}
+
+export interface TrackResource {
+  name: string
+  address: string
+  description: string | null
+  status: Labeled<ObjectStatus>
+  cover: string | null
+  readiness: number | null
+  works: { done: number; total: number }
+  started_at: string | null
+  finished_at: string | null
+  actual_started_at: string | null
+  actual_finished_at: string | null
+  finished: boolean
+  materials: TrackMaterialResource[]
+  services: TrackServiceResource[]
+  money: {
+    client: number
+    paid: number
+    due: number
+    progress: number
+    state: Labeled<DueState>
+  }
+  payments: TrackPaymentResource[]
+}
 
 export interface TrackMaterial {
   id: number
   name: string
   quantity: number
   unit: string
-  status: { value: MaterialStatus; label: string }
+  status: Labeled<MaterialStatus>
 }
 
 export interface TrackService {
@@ -28,28 +75,22 @@ export interface TrackService {
   description: string | null
   unit: string
   plannedVolume: number
-  /** null — факт ще не вносили: для замовника це «ще не остаточно». */
   actualVolume: number | null
-  status: { value: ServiceStatus; label: string }
-  /** Сума роботи для замовника — без розкладки на ЗП і профіт. */
+  status: Labeled<ServiceStatus>
   total: number
 }
 
 export interface TrackPayment {
   id: number
-  /** Дата надходження або дата, на яку його чекають. */
   date: string | null
   amount: number
   received: boolean
-  /** Коментар, який власник дозволив показати; інакше — нічого. */
   note: string | null
 }
 
 export interface TrackMoney {
-  /** Сума за договором: матеріали + роботи − знижка. */
   client: number
   paid: number
-  /** Залишок; відʼємний — переплата. */
   due: number
   progress: number
   state: DueState
@@ -59,17 +100,12 @@ export interface TrackObject {
   name: string
   address: string
   description: string | null
-  status: ConstructionObject['status']
+  status: Labeled<ObjectStatus>
   cover: string | null
-  /** Готовність за обсягами робіт, 0…1. null — рахувати ще нема з чого. */
   readiness: number | null
   works: { done: number; total: number }
   plannedStart: string | null
   plannedFinish: string | null
-  /**
-   * Фактичні дати показуємо лише на завершеному обʼєкті: на півдорозі вони
-   * ще не остаточні й лише збивають.
-   */
   actualStart: string | null
   actualFinish: string | null
   finished: boolean
@@ -79,38 +115,28 @@ export interface TrackObject {
   payments: TrackPayment[]
 }
 
-export function trackObject(object: ConstructionObject, today: string): TrackObject {
-  const finance = objectFinance(object, today)
-  const finished = object.status.value === 'done' || object.actual_finished_at !== null
-
+export function normalizeTrack(resource: TrackResource): TrackObject {
   return {
-    name: object.name,
-    address: object.address,
-    description: object.description,
-    status: object.status,
-    cover: object.cover,
-    readiness: readiness(object),
-    works: servicesDone(object),
-    plannedStart: object.started_at,
-    plannedFinish: object.finished_at,
-    actualStart: finished ? object.actual_started_at : null,
-    actualFinish: finished ? object.actual_finished_at : null,
-    finished,
-
-    // Ані ціни закупівлі, ані того, хто платив за матеріал: замовнику важливо,
-    // що саме вже на майданчику.
-    materials: object.materials.map((material) => ({
+    name: resource.name,
+    address: resource.address,
+    description: resource.description,
+    status: resource.status,
+    cover: resource.cover,
+    readiness: resource.readiness,
+    works: resource.works,
+    plannedStart: resource.started_at,
+    plannedFinish: resource.finished_at,
+    actualStart: resource.finished ? resource.actual_started_at : null,
+    actualFinish: resource.finished ? resource.actual_finished_at : null,
+    finished: resource.finished,
+    materials: resource.materials.map((material) => ({
       id: material.id,
       name: material.name,
       quantity: material.quantity,
       unit: material.unit,
       status: material.status,
     })),
-
-    // Ціну роботи показуємо: без неї замовник не зрозуміє, з чого склалась
-    // сума за договором, а прозорість — весь сенс цієї сторінки. Виконавці
-    // та їхні ставки лишаються всередині.
-    services: object.services.map((service) => ({
+    services: resource.services.map((service) => ({
       id: service.id,
       name: service.name,
       description: service.description,
@@ -118,29 +144,27 @@ export function trackObject(object: ConstructionObject, today: string): TrackObj
       plannedVolume: service.planned_volume,
       actualVolume: service.actual_volume,
       status: service.status,
-      total: serviceRevenueTotal(service),
+      total: service.total,
     })),
-
     money: {
-      client: finance.client,
-      paid: finance.paid,
-      due: finance.due,
-      progress: finance.progress,
-      state: dueState(finance.client, finance.paid),
+      client: resource.money.client,
+      paid: resource.money.paid,
+      due: resource.money.due,
+      progress: resource.money.progress,
+      state: resource.money.state.value,
     },
-
-    payments: object.payments.flatMap((payment) =>
-      payment.status.value === 'cancelled'
-        ? []
-        : [
-            {
-              id: payment.id,
-              date: payment.paid_at,
-              amount: payment.amount,
-              received: payment.status.value === 'paid',
-              note: payment.client_visible ? payment.name : null,
-            },
-          ],
-    ),
+    payments: resource.payments.map((payment) => ({
+      id: payment.id,
+      date: payment.date,
+      amount: payment.amount,
+      received: payment.received,
+      note: payment.note,
+    })),
   }
+}
+
+export async function fetchTrack(token: string, signal?: AbortSignal): Promise<TrackObject> {
+  const resource = await api.get<TrackResource>(`/track/${encodeURIComponent(token)}`, { signal })
+
+  return normalizeTrack(resource)
 }

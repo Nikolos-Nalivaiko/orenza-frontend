@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref, useId } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import PhoneField from '@/components/ui/PhoneField.vue'
 import TextField from '@/components/ui/TextField.vue'
@@ -18,12 +18,22 @@ import {
  * тож вона активна за визначенням. Опис і решта — уже в картці.
  */
 
-const emit = defineEmits<{ create: [form: EmployeeForm]; close: [] }>()
+const props = defineProps<{
+  saving?: boolean
+  serverError?: string | null
+}>()
+
+const emit = defineEmits<{ create: [form: EmployeeForm]; close: []; dirty: [] }>()
 
 const titleId = useId()
 
-const form = reactive<EmployeeForm>({ name: '', role: '', crew: '', phone: '', email: '' })
+const form = reactive<EmployeeForm>({ name: '', role: '', phone: '', email: '' })
 const errors = ref<EmployeeErrors>({})
+
+watch(form, () => {
+  errors.value = {}
+  emit('dirty')
+})
 
 function submit(): void {
   errors.value = validateEmployeeForm(form)
@@ -33,7 +43,6 @@ function submit(): void {
   }
 
   emit('create', { ...form })
-  emit('close')
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -96,14 +105,6 @@ onBeforeUnmount(() => {
           :error="errors.role"
         />
 
-        <TextField
-          v-model="form.crew"
-          label="Бригада"
-          optional
-          placeholder="Бригада №1 або підряд"
-          :error="errors.crew"
-        />
-
         <PhoneField v-model="form.phone" optional :error="errors.phone" />
 
         <TextField
@@ -119,8 +120,12 @@ onBeforeUnmount(() => {
         </TextField>
       </div>
 
+      <p v-if="props.serverError" class="error" role="alert">{{ props.serverError }}</p>
+
       <footer class="foot">
-        <button type="submit" class="btn btn--primary btn--sm">Завести людину</button>
+        <button type="submit" class="btn btn--primary btn--sm" :disabled="props.saving">
+          {{ props.saving ? 'Зберігаємо…' : 'Завести людину' }}
+        </button>
         <button type="button" class="btn btn--ghost btn--sm" @click="emit('close')">
           Скасувати
         </button>
@@ -210,6 +215,15 @@ onBeforeUnmount(() => {
 /* Імʼя — єдине обовʼязкове поле, тож воно стоїть на всю ширину вікна. */
 .grid__wide {
   grid-column: 1 / -1;
+}
+
+.error {
+  padding: 12px 14px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13px;
 }
 
 .foot {

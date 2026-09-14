@@ -1,8 +1,5 @@
 /**
- * Співробітники простору. Свого списку в застосунку вони ще не мають, але
- * власна картка вже є, тож тип описаний так, як його віддаватиме майбутній
- * GET /api/v1/workspaces/{id}/employees — щоб потім замінити лише джерело
- * даних, а не поля форми.
+ * Співробітники простору: GET|POST /api/v1/workspaces/{id}/employees.
  *
  * Роль тут — спеціальність («муляр», «бригадир»), а не права доступу: це
  * підпис, за яким людину впізнають у списку виконавців. Повноцінні ролі й
@@ -38,8 +35,6 @@ export interface Employee {
   name: string
   /** Спеціальність — саме за нею людину шукають у списку виконавців. */
   role: string
-  /** Бригада або підряд, у якому людина працює. */
-  crew: string
   phone: string
   email: string
   status: EmployeeStatus
@@ -52,24 +47,20 @@ export interface Employee {
   created_at: string | null
 }
 
-/** Рядок під іменем у списку: «Штукатур · Бригада №3». */
+/** Підпис під іменем у списку виконавців: «Штукатур». */
 export function employeeMeta(employee: Employee): string {
-  return [employee.role, employee.crew].filter(Boolean).join(' · ')
+  return employee.role
 }
 
 export function isActiveEmployee(employee: Employee): boolean {
   return employee.status === 'active'
 }
 
-/**
- * Запис із минулої сесії міг не мати ні телефона, ні статусу — їх завели
- * разом із карткою. Порожній рядок, а не null: поле просто ще не заповнили.
- */
+/** Незаповнене поле — порожній рядок, а не null: так його показує форма. */
 export function normalizeEmployee(employee: Employee): Employee {
   return {
     ...employee,
     role: employee.role ?? '',
-    crew: employee.crew ?? '',
     phone: employee.phone ?? '',
     email: employee.email ?? '',
     status: employee.status ?? 'active',
@@ -88,7 +79,6 @@ export const EMPLOYEE_NOTES_MAX = 1000
 export interface EmployeeForm {
   name: string
   role: string
-  crew: string
   phone: string
   email: string
 }
@@ -103,7 +93,6 @@ export function employeeForm(employee: Employee): EmployeeForm {
   return {
     name: employee.name,
     role: employee.role,
-    crew: employee.crew,
     phone: employee.phone,
     email: employee.email,
   }
@@ -129,10 +118,6 @@ export function validateEmployeeForm(form: EmployeeForm): EmployeeErrors {
     errors.role = `Максимум ${EMPLOYEE_ROLE_MAX} символів`
   }
 
-  if (form.crew.trim().length > EMPLOYEE_ROLE_MAX) {
-    errors.crew = `Максимум ${EMPLOYEE_ROLE_MAX} символів`
-  }
-
   if (!isBlankPhone(form.phone) && !isCompletePhone(form.phone)) {
     errors.phone = PHONE_ERROR
   }
@@ -148,11 +133,10 @@ export function hasEmployeeErrors(errors: EmployeeErrors): boolean {
   return Object.keys(errors).length > 0
 }
 
-/** Тіло запиту PATCH /api/v1/workspaces/{id}/employees/{employee}. */
+/** Тіло запиту POST|PATCH /api/v1/workspaces/{id}/employees. */
 export interface EmployeePayload {
   name: string
   role: string
-  crew: string
   phone: string
   email: string
 }
@@ -161,102 +145,7 @@ export function buildEmployeePayload(form: EmployeeForm): EmployeePayload {
   return {
     name: form.name.trim(),
     role: form.role.trim(),
-    crew: form.crew.trim(),
     phone: form.phone.trim(),
     email: form.email.trim().toLowerCase(),
   }
 }
-
-/* ── Демодані ──────────────────────────────────────────────────── */
-
-/** Довідника співробітників ще немає — беремо бригади з дашборда. */
-export const DEMO_EMPLOYEES: readonly Employee[] = [
-  {
-    id: 1,
-    name: 'Ігор Величко',
-    role: 'Бригадир',
-    crew: 'Бригада №3',
-    phone: '+380 67 330 18 42',
-    email: 'i.velychko@orenza.ua',
-    status: 'active',
-    notes: 'Тримає на собі «Пасаж». Питання по обʼєкту вирішувати через нього, не через людей.',
-    created_at: '2025-11-04T08:30:00.000Z',
-  },
-  {
-    id: 2,
-    name: 'Андрій Пасічник',
-    role: 'Штукатур',
-    crew: 'Бригада №3',
-    phone: '+380 50 214 76 03',
-    email: '',
-    status: 'active',
-    notes: '',
-    created_at: '2025-11-04T08:30:00.000Z',
-  },
-  {
-    id: 3,
-    name: 'Юрій Гнатенко',
-    role: 'Різнороб',
-    crew: 'Бригада №3',
-    phone: '+380 63 441 09 55',
-    email: '',
-    status: 'active',
-    notes: '',
-    created_at: '2026-01-20T09:15:00.000Z',
-  },
-  {
-    id: 4,
-    name: 'Тарас Мельник',
-    role: 'Муляр',
-    crew: 'Бригада №1',
-    phone: '+380 97 118 62 30',
-    email: '',
-    status: 'active',
-    notes: 'Добре кладе лицьову цеглу. Далі 20 км від міста обʼєкти не бере.',
-    created_at: '2025-08-12T07:45:00.000Z',
-  },
-  {
-    id: 5,
-    name: 'Сергій Кравець',
-    role: 'Електрик',
-    crew: 'Бригада №1',
-    phone: '+380 66 507 23 18',
-    email: 's.kravets@orenza.ua',
-    status: 'active',
-    notes: '',
-    created_at: '2025-08-12T07:45:00.000Z',
-  },
-  {
-    id: 6,
-    name: 'Оксана Панченко',
-    role: 'Маляр',
-    crew: 'Бригада №2',
-    phone: '+380 68 902 44 71',
-    email: '',
-    status: 'active',
-    notes: '',
-    created_at: '2026-02-02T10:00:00.000Z',
-  },
-  {
-    id: 7,
-    name: 'Дмитро Бойко',
-    role: 'Плиточник',
-    crew: 'Бригада №2',
-    phone: '+380 95 613 87 20',
-    email: '',
-    status: 'inactive',
-    notes: 'Пішов у відпустку до кінця місяця — на нові роботи поки не ставимо.',
-    created_at: '2025-09-23T06:50:00.000Z',
-  },
-  {
-    id: 8,
-    name: 'Віталій Соколюк',
-    role: 'Монтажник',
-    crew: 'Підряд «Стальпром»',
-    phone: '+380 44 501 22 90',
-    email: '',
-    status: 'active',
-    notes: '',
-    created_at: '2026-03-16T11:30:00.000Z',
-  },
-]

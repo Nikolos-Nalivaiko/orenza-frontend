@@ -40,10 +40,7 @@ const active = computed(() => isActiveEmployee(props.employee))
 
 const month = computed(() => payrollMonthLabel(props.today))
 
-/** Спеціальність і бригада — один підпис під іменем, а не два поля. */
-const meta = computed(() =>
-  [props.employee.role, props.employee.crew].filter((part) => part !== '').join(' · '),
-)
+const meta = computed(() => props.employee.role)
 
 function startEdit(): void {
   Object.assign(form, employeeForm(props.employee))
@@ -126,13 +123,6 @@ function save(): void {
             optional
             placeholder="Муляр, електрик, бригадир"
             :error="errors.role"
-          />
-          <TextField
-            v-model="form.crew"
-            label="Бригада"
-            optional
-            placeholder="Бригада №1 або підряд"
-            :error="errors.crew"
           />
           <PhoneField v-model="form.phone" optional :error="errors.phone" />
           <TextField

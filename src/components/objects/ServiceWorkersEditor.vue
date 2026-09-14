@@ -61,8 +61,12 @@ function add(): void {
  * Людини ще немає в довіднику — заводимо її з одного імені й одразу ставимо в
  * цей рядок: кидати заповнену роботу заради довідника ніхто не має.
  */
-function create(worker: ServiceWorkerForm, name: string): void {
-  worker.employeeId = team.addEmployee(name).id
+async function create(worker: ServiceWorkerForm, name: string): Promise<void> {
+  const employee = await team.addEmployee(name)
+
+  if (employee !== null) {
+    worker.employeeId = employee.id
+  }
 }
 
 function remove(id: string): void {

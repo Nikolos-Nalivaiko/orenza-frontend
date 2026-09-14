@@ -61,7 +61,7 @@ const crewService = computed(
 
 onMounted(() => {
   // У приватному просторі виконавців немає — довідник там ні до чого.
-  if (!solo.value && employees.items.length === 0) {
+  if (!solo.value && !employees.loaded) {
     void employees.fetchEmployees()
   }
 })

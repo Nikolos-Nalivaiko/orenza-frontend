@@ -55,7 +55,7 @@ const matches = computed(() => {
   }
 
   return free.value.filter((employee) =>
-    `${employee.name} ${employee.role} ${employee.crew}`.toLowerCase().includes(needle),
+    `${employee.name} ${employee.role}`.toLowerCase().includes(needle),
   )
 })
 
@@ -204,7 +204,7 @@ function onKeydown(event: KeyboardEvent): void {
             type="text"
             autocomplete="off"
             aria-label="Пошук співробітника"
-            placeholder="Ім’я, спеціальність або бригада"
+            placeholder="Ім’я або спеціальність"
             :aria-controls="listId"
             :aria-activedescendant="total > 0 ? optionId(active) : undefined"
             @keydown="onKeydown"

@@ -59,7 +59,7 @@ const state = computed(() => {
 })
 
 onMounted(() => {
-  if (employees.items.length === 0) {
+  if (!employees.loaded) {
     void employees.fetchEmployees()
   }
 
@@ -76,10 +76,15 @@ function reset(): void {
  * Заведену людину одразу відкриваємо: далі в ній пишуть, як із нею працювати,
  * і дивляться завантаження — а це вже картка.
  */
-function create(form: EmployeeForm): void {
-  const employee = employees.createEmployee(form)
+async function create(form: EmployeeForm): Promise<void> {
+  const employee = await employees.createEmployee(form)
 
-  void router.push({ name: 'employee', params: { id: employee.id } })
+  if (employee === null) {
+    return
+  }
+
+  creating.value = false
+  await router.push({ name: 'employee', params: { id: employee.id } })
 }
 </script>
 
@@ -99,6 +104,13 @@ function create(form: EmployeeForm): void {
         <span>Новий співробітник</span>
       </button>
     </header>
+
+    <p v-if="employees.error && !creating" class="failed" role="alert">
+      <span>{{ employees.error }}</span>
+      <button type="button" class="failed__retry" @click="employees.fetchEmployees()">
+        Оновити
+      </button>
+    </p>
 
     <EmployeesToolbar
       v-if="state !== 'blank' && state !== 'loading'"
@@ -147,7 +159,14 @@ function create(form: EmployeeForm): void {
 
     <EmployeesTable v-else :rows="rows" :today="today" />
 
-    <EmployeeCreateDialog v-if="creating" @create="create" @close="creating = false" />
+    <EmployeeCreateDialog
+      v-if="creating"
+      :saving="employees.isSaving"
+      :server-error="employees.error"
+      @create="create"
+      @dirty="employees.reset()"
+      @close="creating = false"
+    />
   </div>
 </template>
 
@@ -195,6 +214,31 @@ function create(form: EmployeeForm): void {
   padding: 40px 0;
   font-size: 13.5px;
   color: var(--ink-faint);
+}
+
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid rgb(200 52 31 / 30%);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger);
+  font-size: 13.5px;
+}
+
+.failed__retry {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .hint {

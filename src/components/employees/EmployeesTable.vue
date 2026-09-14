@@ -42,8 +42,6 @@ defineProps<{ rows: EmployeeRow[]; today: string }>()
               {{ employee.name }}
             </RouterLink>
           </p>
-
-          <p class="erow__crew">{{ employee.crew || 'без бригади' }}</p>
         </div>
 
         <div class="cell" data-label="Телефон">
@@ -192,7 +190,6 @@ defineProps<{ rows: EmployeeRow[]; today: string }>()
   text-underline-offset: 3px;
 }
 
-.erow__crew,
 .erow__role {
   font-size: 12.5px;
   color: var(--ink-muted);

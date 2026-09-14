@@ -21,7 +21,6 @@ function makeEmployee(overrides: Partial<Employee> = {}): Employee {
     id: 1,
     name: 'Тарас Мельник',
     role: 'Муляр',
-    crew: 'Бригада №1',
     phone: '+380 97 118 62 30',
     email: '',
     status: 'active',
