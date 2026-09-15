@@ -83,7 +83,7 @@ function percent(value: number): string {
             {{ object.finished_at === null ? '—' : formatDay(object.finished_at) }}
           </p>
           <p class="orow__due" :class="{ 'is-late': summary.overdue }">
-            {{ formatDeadline(summary.daysLeft, summary.overdue) }}
+            {{ formatDeadline(summary.daysLeft, summary.overdue, summary.finishDrift) }}
           </p>
         </div>
       </li>

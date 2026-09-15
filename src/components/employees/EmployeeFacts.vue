@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { formatAmount } from '@/lib/amount'
 import { EMPLOYEE_STATUS_LABELS, type Employee } from '@/lib/employees'
-import { daysBetween, formatDay, formatDays } from '@/lib/objects'
+import { formatDay, formatDays, periodDays } from '@/lib/objects'
 import { payrollMonthLabel, type PayrollTotals } from '@/lib/payroll'
 
 /**
@@ -19,7 +19,7 @@ const since = computed(() =>
   props.employee.created_at === null ? null : props.employee.created_at.slice(0, 10),
 )
 
-const days = computed(() => (since.value === null ? null : daysBetween(since.value, props.today)))
+const days = computed(() => (since.value === null ? null : periodDays(since.value, props.today)))
 
 const month = computed(() => payrollMonthLabel(props.today))
 </script>
@@ -34,7 +34,7 @@ const month = computed(() => payrollMonthLabel(props.today))
         <dd class="fact__value">{{ since === null ? '—' : formatDay(since) }}</dd>
 
         <p class="fact__sub">
-          <template v-if="days !== null && days > 0">{{ formatDays(days) }} у команді</template>
+          <template v-if="days !== null && days > 1">{{ formatDays(days) }} у команді</template>
           <template v-else-if="since !== null">заведений щойно</template>
           <template v-else>дата заведення невідома</template>
         </p>

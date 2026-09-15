@@ -25,6 +25,7 @@ export interface ObjectSummary {
   /** Днів до планового завершення; відʼємне — стільки вже прострочено. */
   daysLeft: number | null
   overdue: boolean
+  finishDrift: number | null
 }
 
 function clamp01(value: number): number {
@@ -143,6 +144,11 @@ export function objectSummary(object: ConstructionObject, today: string): Object
   )
 
   const daysLeft = object.finished_at === null ? null : daysBetween(today, object.finished_at)
+  const handedOver = object.actual_finished_at !== null
+  const finishDrift =
+    handedOver && object.finished_at !== null
+      ? daysBetween(object.finished_at, object.actual_finished_at ?? '')
+      : null
 
   return {
     readiness: readiness(object),
@@ -153,7 +159,8 @@ export function objectSummary(object: ConstructionObject, today: string): Object
     due: client - paid,
     progress: client === 0 ? 0 : clamp01(paid / client),
     daysLeft,
-    overdue: daysLeft !== null && daysLeft < 0 && object.status.value !== 'done',
+    overdue: daysLeft !== null && daysLeft < 0 && !handedOver && object.status.value !== 'done',
+    finishDrift,
   }
 }
 
@@ -338,7 +345,21 @@ export function clientsOf(items: ConstructionObject[]): ClientOption[] {
 /* ── Підписи ───────────────────────────────────────────────────── */
 
 /** «Прострочено 3 дні», «Сьогодні», «Через 12 днів». */
-export function formatDeadline(daysLeft: number | null, overdue: boolean): string {
+export function formatDeadline(
+  daysLeft: number | null,
+  overdue: boolean,
+  finishDrift: number | null = null,
+): string {
+  if (finishDrift !== null) {
+    if (finishDrift === 0) {
+      return 'Здано в строк'
+    }
+
+    return finishDrift > 0
+      ? `Здано із запізненням ${formatDays(finishDrift)}`
+      : `Здано на ${formatDays(finishDrift)} раніше`
+  }
+
   if (daysLeft === null) {
     return 'Без дедлайну'
   }
@@ -351,7 +372,5 @@ export function formatDeadline(daysLeft: number | null, overdue: boolean): strin
     return `Через ${formatDays(daysLeft)}`
   }
 
-  return overdue
-    ? `Прострочено ${formatDays(daysLeft)}`
-    : `Завершено із запізненням ${formatDays(daysLeft)}`
+  return overdue ? `Прострочено ${formatDays(daysLeft)}` : 'Завершено'
 }

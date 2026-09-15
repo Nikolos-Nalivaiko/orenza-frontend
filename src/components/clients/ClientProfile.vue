@@ -35,7 +35,7 @@ const left = computed(() => props.profile.payments - props.profile.received)
         </dd>
 
         <p class="fact__sub">
-          <template v-if="profile.days !== null && profile.days > 0">
+          <template v-if="profile.days !== null && profile.days > 1">
             співпраці вже {{ formatSpell(profile.days) }}
           </template>
           <template v-else-if="profile.since !== null">перший обʼєкт зовсім свіжий</template>

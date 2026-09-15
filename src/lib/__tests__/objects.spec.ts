@@ -5,7 +5,10 @@ import {
   emptyObjectForm,
   formatDay,
   formatDrift,
+  formatDayBrief,
+  formatPeriodBrief,
   formatSpan,
+  periodDays,
   validateObjectForm,
   type ObjectForm,
 } from '../objects'
@@ -43,16 +46,33 @@ describe('validateObjectForm', () => {
     expect(validateObjectForm(makeForm({ factEndDate: '2026-09-10' })).factStartDate).toBeDefined()
   })
 
+  it('не приймає фактичні дати з майбутнього', () => {
+    const errors = validateObjectForm(
+      makeForm({ factStartDate: '2026-09-15', factEndDate: '2026-09-20' }),
+      '2026-09-14',
+    )
+
+    expect(errors.factStartDate).toBe('Фактична дата не може бути пізніше за сьогодні')
+    expect(errors.factEndDate).toBe('Фактична дата не може бути пізніше за сьогодні')
+    expect(
+      validateObjectForm(makeForm({ factStartDate: '2026-09-14' }), '2026-09-14').factStartDate,
+    ).toBeUndefined()
+  })
+
   it('звіряє статус із фактичними датами', () => {
     expect(validateObjectForm(makeForm({ status: 'in_progress' })).factStartDate).toBeDefined()
     expect(
-      validateObjectForm(makeForm({ status: 'in_progress', factStartDate: '2026-09-01' })),
+      validateObjectForm(
+        makeForm({ status: 'in_progress', factStartDate: '2026-09-01' }),
+        '2026-09-30',
+      ),
     ).toEqual({})
 
     expect(validateObjectForm(makeForm({ status: 'done' })).factEndDate).toBeDefined()
     expect(
       validateObjectForm(
         makeForm({ status: 'done', factStartDate: '2026-09-01', factEndDate: '2026-09-20' }),
+        '2026-09-30',
       ),
     ).toEqual({})
   })
@@ -191,9 +211,24 @@ describe('дати', () => {
     expect(daysBetween('2026-09-01', '')).toBeNull()
     expect(daysBetween('не дата', '2026-09-01')).toBeNull()
 
-    expect(formatSpan('2026-09-01', '2026-09-02')).toBe('Триває 1 день')
-    expect(formatSpan('2026-09-01', '2026-09-04')).toBe('Триває 3 дні')
-    expect(formatSpan('2026-09-01', '2026-09-10')).toBe('Триває 9 днів')
+    expect(periodDays('2026-09-01', '2026-09-30')).toBe(30)
+    expect(periodDays('2026-09-01', '2026-09-01')).toBe(1)
+    expect(periodDays('2026-09-10', '2026-09-01')).toBeNull()
+  })
+
+  it('коротко пише дати й періоди, рік — лише не поточний', () => {
+    const today = '2026-09-14'
+
+    expect(formatDayBrief('2026-09-30', today)).toBe('30 вер.')
+    expect(formatDayBrief('2027-01-05', today)).toBe('5 січ. 2027')
+    expect(formatPeriodBrief('2026-09-01', '2026-09-30', today)).toBe('1–30 вер.')
+    expect(formatPeriodBrief('2026-07-03', '2026-08-26', today)).toBe('3 лип. — 26 серп.')
+    expect(formatPeriodBrief('2026-12-01', '2027-02-10', today)).toBe('1 груд. — 10 лют. 2027')
+    expect(formatPeriodBrief('2026-09-10', '2026-09-10', today)).toBe('10 вер.')
+
+    expect(formatSpan('2026-09-01', '2026-09-02')).toBe('Триває 2 дні')
+    expect(formatSpan('2026-09-01', '2026-09-04')).toBe('Триває 4 дні')
+    expect(formatSpan('2026-09-01', '2026-09-30')).toBe('Триває 30 днів')
     expect(formatSpan('2026-09-01', '2026-09-01')).toBe('Один день')
     expect(formatSpan('2026-09-10', '2026-09-01')).toBe('')
   })

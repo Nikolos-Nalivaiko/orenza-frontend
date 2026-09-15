@@ -9,7 +9,7 @@ import ObjectStatusMenu from '@/components/objects/ObjectStatusMenu.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
 import { contactCaption } from '@/lib/clients'
-import { daysBetween, formatDay, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
+import { formatDay, periodDays, type ConstructionObject, type ObjectStatus } from '@/lib/objects'
 import { formatDeadline, servicesDone, type ObjectSummary } from '@/lib/objectList'
 import { monogram } from '@/lib/workspaces'
 
@@ -53,9 +53,9 @@ const timePercent = computed(() => {
     return null
   }
 
-  const total = daysBetween(start, end)
+  const total = periodDays(start, end)
 
-  if (total === null || total <= 0) {
+  if (total === null) {
     return null
   }
 
@@ -66,7 +66,7 @@ const timePercent = computed(() => {
 const soon = computed(() => {
   const left = props.summary.daysLeft
 
-  return left !== null && left >= 0 && left <= 3
+  return props.summary.finishDrift === null && left !== null && left >= 0 && left <= 3
 })
 
 const copied = ref(false)
@@ -296,7 +296,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
             class="chip"
             :class="{ 'chip--late': summary.overdue, 'chip--soon': soon && !summary.overdue }"
           >
-            {{ formatDeadline(summary.daysLeft, summary.overdue) }}
+            {{ formatDeadline(summary.daysLeft, summary.overdue, summary.finishDrift) }}
           </span>
 
           <button

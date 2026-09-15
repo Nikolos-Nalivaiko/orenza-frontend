@@ -7,20 +7,19 @@ import {
   daysBetween,
   DESCRIPTION_MAX,
   formatDay,
-  formatDays,
   formatDiscount,
+  FUTURE_FACT,
+  isFutureFact,
   OBJECT_DATE_LABELS,
   todayIso,
   type ConstructionObject,
   type ObjectDateField,
 } from '@/lib/objects'
+import { dateDeviation, objectTimeline } from '@/lib/timeline'
 
 /**
  * Основне про обʼєкт — читабельний блок, а не форма: поля стоять як текст,
  * а редактор відкривається по кліку рівно там, куди натиснули.
- *
- * Дати зведені в матрицю «план проти факту»: саме так на них і дивляться —
- * не чотирма окремими полями, а двома парами, між якими видно зсув.
  *
  * Статус, етап і замовник сюди не потрапляють навмисно — вони вже в шапці
  * картки, і другий їхній примірник лише розтягував би екран.
@@ -28,8 +27,9 @@ import {
 
 type FieldKey = ObjectDateField | 'description' | 'discount'
 
-interface DateRow {
-  label: string
+interface Milestone {
+  key: 'start' | 'finish'
+  title: string
   plan: ObjectDateField
   fact: ObjectDateField
 }
@@ -42,10 +42,9 @@ const emit = defineEmits<{
   discount: [percent: number | null, amount: number | null]
 }>()
 
-/** Дати йдуть парами «план — факт»: саме так їх і звіряють. */
-const DATE_ROWS: readonly DateRow[] = [
-  { label: 'Початок', plan: 'started_at', fact: 'actual_started_at' },
-  { label: 'Завершення', plan: 'finished_at', fact: 'actual_finished_at' },
+const MILESTONES: readonly Milestone[] = [
+  { key: 'start', title: 'Початок', plan: 'started_at', fact: 'actual_started_at' },
+  { key: 'finish', title: 'Завершення', plan: 'finished_at', fact: 'actual_finished_at' },
 ]
 
 /** День фіксуємо на час життя блоку — кнопка «сьогодні» не має мінятись у руках. */
@@ -66,144 +65,22 @@ const created = computed(() =>
   props.object.created_at === null ? '' : formatDay(props.object.created_at.slice(0, 10)),
 )
 
-/** Плановий строк обʼєкта — підпис під матрицею дат. */
-const planSpan = computed(() => {
-  const { started_at: start, finished_at: end } = props.object
-
-  return start === null || end === null ? null : daysBetween(start, end)
-})
-
-/**
- * Фактичний строк: поки обʼєкт не закритий, рахуємо від фактичного початку
- * до сьогодні — це і є «скільки вже триває».
- */
-const factSpan = computed(() => {
-  const start = props.object.actual_started_at
-
-  if (start === null) {
-    return null
-  }
-
-  const end = props.object.actual_finished_at
-  const days = daysBetween(start, end ?? today)
-
-  return days === null ? null : { done: end !== null, days }
-})
+const timeline = computed(() => objectTimeline(props.object, today))
 
 function dateValue(field: ObjectDateField): string {
   return props.object[field] ?? ''
 }
 
-/* ── Шкала строків ─────────────────────────────────────────────── */
-
-/**
- * Вісь смуг: від найранішої з відомих дат до найпізнішої, включно з
- * сьогоднішнім днем. Без планової пари шкали немає — нема від чого міряти.
- */
-const axis = computed(() => {
-  const object = props.object
-
-  if (object.started_at === null || object.finished_at === null) {
-    return null
+function canMarkToday(milestone: Milestone): boolean {
+  if (dateValue(milestone.fact) !== '') {
+    return false
   }
 
-  const points = [
-    object.started_at,
-    object.finished_at,
-    object.actual_started_at,
-    object.actual_finished_at,
-    today,
-  ].filter((day): day is string => day !== null)
-
-  const from = points.reduce((min, day) => (day < min ? day : min))
-  const to = points.reduce((max, day) => (day > max ? day : max))
-  const total = daysBetween(from, to)
-
-  return total === null || total <= 0 ? null : { from, to, total }
-})
-
-/** Місце дати на шкалі, у відсотках її довжини. */
-function at(day: string): number {
-  const scale = axis.value
-
-  if (scale === null) {
-    return 0
-  }
-
-  const passed = daysBetween(scale.from, day) ?? 0
-
-  return Math.min(100, Math.max(0, (passed / scale.total) * 100))
+  return milestone.key === 'start' || props.object.actual_started_at !== null
 }
 
-function bar(from: string, to: string): { left: string; width: string } {
-  const left = at(from)
-
-  return { left: `${left}%`, width: `${Math.max(at(to) - left, 0)}%` }
-}
-
-const planBar = computed(() => {
-  const { started_at: start, finished_at: end } = props.object
-
-  return axis.value === null || start === null || end === null ? null : bar(start, end)
-})
-
-const factBar = computed(() => {
-  const start = props.object.actual_started_at
-
-  return axis.value === null || start === null
-    ? null
-    : bar(start, props.object.actual_finished_at ?? today)
-})
-
-/** Робота ще йде — у смуги немає правого краю, тож вона в штрихуванні. */
-const factOpen = computed(() => props.object.actual_finished_at === null)
-
-/** Факт переліз плановий фініш — уся смуга червоніє, а не лише хвіст. */
-const factLate = computed(() => {
-  const { finished_at: plan, actual_started_at: start, actual_finished_at: fact } = props.object
-
-  return plan !== null && start !== null && (fact ?? today) > plan
-})
-
-const nowAt = computed(() => {
-  const scale = axis.value
-
-  return scale === null || today < scale.from || today > scale.to ? null : at(today)
-})
-
-/**
- * Підпис «сьогодні» стоїть під самою рискою, а коли та підходить до краю —
- * притискається до краю й ховає крайню дату осі: два підписи на одному місці
- * гірше, ніж один.
- */
-const nowTag = computed(() => {
-  const pos = nowAt.value
-
-  if (pos === null) {
-    return null
-  }
-
-  if (pos >= 84) {
-    return { style: { right: '0' }, hideFrom: false, hideTo: true }
-  }
-
-  if (pos <= 16) {
-    return { style: { left: '0' }, hideFrom: true, hideTo: false }
-  }
-
-  return {
-    style: { left: `${pos}%`, transform: 'translateX(-50%)' },
-    hideFrom: false,
-    hideTo: false,
-  }
-})
-
-/** Зсув факту від плану: додатне — пізніше, ніж домовлялись. */
-function shift(row: DateRow): number | null {
-  const plan = props.object[row.plan]
-  const fact = props.object[row.fact]
-
-  return plan === null || fact === null ? null : daysBetween(plan, fact)
+function deviation(milestone: Milestone) {
+  return dateDeviation(props.object[milestone.plan], props.object[milestone.fact], milestone.key)
 }
 
 async function open(field: FieldKey): Promise<void> {
@@ -236,6 +113,11 @@ function dateProblem(field: ObjectDateField, value: string): string {
 
   const object = props.object
   const plan = field === 'started_at' || field === 'finished_at'
+
+  if (!plan && isFutureFact(value, today)) {
+    return FUTURE_FACT
+  }
+
   const start = plan ? object.started_at : object.actual_started_at
   const end = plan ? object.finished_at : object.actual_finished_at
 
@@ -381,84 +263,48 @@ function save(): void {
       </button>
     </div>
 
-    <!-- Строки: план і факт стоять у двох колонках, щоб зсув було видно
-         одразу, без арифметики в голові. -->
     <div class="block">
-      <header class="dates__head">
-        <p class="block__label">Строки</p>
+      <p class="block__label">Строки</p>
 
-        <p class="dates__span">
-          <template v-if="planSpan !== null">
-            За планом — <span class="dates__strong">{{ formatDays(planSpan) }}</span>
-          </template>
-          <template v-if="planSpan !== null && factSpan"> · </template>
-          <template v-if="factSpan">
-            {{ factSpan.done ? 'фактично' : 'триває вже' }}
-            <span class="dates__strong">{{ formatDays(factSpan.days) }}</span>
-          </template>
-          <template v-if="planSpan === null && factSpan === null">
-            Строки ще не заповнені
-          </template>
-        </p>
-      </header>
-
-      <!-- Дві смуги на спільній осі: план як опора, факт поверх нього. Зсув,
-           який у таблиці читається числом, тут видно як довжину. -->
-      <div v-if="axis && planBar" class="tl">
-        <div class="tl__names">
-          <span>План</span>
-          <span>Факт</span>
+      <dl v-if="timeline.figures.length > 0" class="figs">
+        <div
+          v-for="figure in timeline.figures"
+          :key="figure.label"
+          class="fig"
+          :class="`fig--${figure.tone}`"
+        >
+          <dt class="fig__label">{{ figure.label }}</dt>
+          <dd class="fig__value">
+            <span class="display fig__num">{{ figure.value }}</span>
+            <span v-if="figure.unit" class="fig__unit">{{ figure.unit }}</span>
+          </dd>
+          <dd v-if="figure.hint" class="fig__hint">{{ figure.hint }}</dd>
         </div>
+      </dl>
 
-        <div class="tl__area">
-          <span class="tl__track">
-            <span class="tl__bar tl__bar--plan" :style="planBar" />
-          </span>
+      <p v-if="timeline.note" class="figs__note">{{ timeline.note }}</p>
 
-          <span class="tl__track">
-            <span
-              v-if="factBar"
-              class="tl__bar"
-              :class="[factLate ? 'tl__bar--late' : 'tl__bar--fact', { 'tl__bar--open': factOpen }]"
-              :style="factBar"
-            />
-            <span v-else class="tl__none">факт не відмічено</span>
-          </span>
+      <div class="stages">
+        <section v-for="milestone in MILESTONES" :key="milestone.key" class="stage">
+          <h3 class="stage__title">{{ milestone.title }}</h3>
 
-          <!-- Сьогодні — єдина точка на осі, якої немає в жодному полі. -->
-          <span
-            v-if="nowAt !== null"
-            class="tl__now"
-            :style="{ left: `${nowAt}%` }"
-            title="Сьогодні"
-            aria-hidden="true"
-          />
-        </div>
+          <div
+            v-for="line in [
+              { kind: 'План', field: milestone.plan },
+              { kind: 'Факт', field: milestone.fact },
+            ]"
+            :key="line.field"
+            class="stage__row"
+            :class="{ 'stage__row--edit': editing === line.field }"
+          >
+            <span class="stage__kind">{{ line.kind }}</span>
 
-        <div class="tl__axis">
-          <span :class="{ 'is-away': nowTag?.hideFrom }">{{ formatDay(axis.from) }}</span>
-
-          <span v-if="nowTag" class="tl__nowtag" :style="nowTag.style">сьогодні</span>
-
-          <span :class="{ 'is-away': nowTag?.hideTo }">{{ formatDay(axis.to) }}</span>
-        </div>
-      </div>
-
-      <div class="dates">
-        <span class="dates__gap" />
-        <p class="dates__col">План</p>
-        <p class="dates__col">Факт</p>
-
-        <template v-for="row in DATE_ROWS" :key="row.label">
-          <p class="dates__row">{{ row.label }}</p>
-
-          <div class="dates__cell" :class="{ 'dates__cell--edit': editing === row.plan }">
-            <div v-if="editing === row.plan" class="edit">
+            <div v-if="editing === line.field" class="edit">
               <input
                 v-model="draft"
                 class="ctl"
                 type="date"
-                :aria-label="OBJECT_DATE_LABELS[row.plan]"
+                :aria-label="OBJECT_DATE_LABELS[line.field]"
                 @keydown.esc="close"
                 @keydown.enter="save"
               />
@@ -467,52 +313,10 @@ function save(): void {
                 <button type="button" class="mini mini--go" @click="save">Зберегти</button>
                 <button type="button" class="mini" @click="close">Скасувати</button>
                 <button
-                  v-if="dateValue(row.plan)"
+                  v-if="dateValue(line.field)"
                   type="button"
                   class="mini mini--drop"
-                  @click="clearDate(row.plan)"
-                >
-                  Очистити
-                </button>
-              </div>
-
-              <p v-if="problem" class="edit__bad">{{ problem }}</p>
-            </div>
-
-            <button
-              v-else
-              type="button"
-              class="pick"
-              :aria-label="OBJECT_DATE_LABELS[row.plan]"
-              @click="open(row.plan)"
-            >
-              <span v-if="dateValue(row.plan)" class="pick__strong">
-                {{ formatDay(dateValue(row.plan)) }}
-              </span>
-              <span v-else class="pick__none">не вказано</span>
-              <span class="pick__pen" aria-hidden="true"><AppIcon name="document" /></span>
-            </button>
-          </div>
-
-          <div class="dates__cell" :class="{ 'dates__cell--edit': editing === row.fact }">
-            <div v-if="editing === row.fact" class="edit">
-              <input
-                v-model="draft"
-                class="ctl"
-                type="date"
-                :aria-label="OBJECT_DATE_LABELS[row.fact]"
-                @keydown.esc="close"
-                @keydown.enter="save"
-              />
-
-              <div class="edit__foot">
-                <button type="button" class="mini mini--go" @click="save">Зберегти</button>
-                <button type="button" class="mini" @click="close">Скасувати</button>
-                <button
-                  v-if="dateValue(row.fact)"
-                  type="button"
-                  class="mini mini--drop"
-                  @click="clearDate(row.fact)"
+                  @click="clearDate(line.field)"
                 >
                   Очистити
                 </button>
@@ -525,44 +329,41 @@ function save(): void {
               <button
                 type="button"
                 class="pick"
-                :aria-label="OBJECT_DATE_LABELS[row.fact]"
-                @click="open(row.fact)"
+                :aria-label="OBJECT_DATE_LABELS[line.field]"
+                @click="open(line.field)"
               >
-                <span v-if="dateValue(row.fact)" class="pick__strong">
-                  {{ formatDay(dateValue(row.fact)) }}
+                <span v-if="dateValue(line.field)" class="pick__strong">
+                  {{ formatDay(dateValue(line.field)) }}
                 </span>
                 <span v-else class="pick__none">не вказано</span>
                 <span class="pick__pen" aria-hidden="true"><AppIcon name="document" /></span>
               </button>
 
-              <!-- Зсув від плану — головне, заради чого факт узагалі ведуть. -->
-              <span
-                v-if="shift(row) !== null"
-                class="chip"
-                :class="{
-                  'chip--late': (shift(row) ?? 0) > 0,
-                  'chip--early': (shift(row) ?? 0) < 0,
-                }"
-              >
-                <template v-if="shift(row) === 0">вчасно</template>
-                <template v-else>
-                  {{ (shift(row) ?? 0) > 0 ? '+' : '−' }}{{ formatDays(shift(row) ?? 0) }}
-                </template>
-              </span>
+              <template v-if="line.field === milestone.fact">
+                <span
+                  v-if="deviation(milestone)"
+                  class="chip"
+                  :class="`chip--${deviation(milestone)?.tone}`"
+                  :title="
+                    milestone.key === 'start' ? 'Зсув старту від плану' : 'Зсув здачі від плану'
+                  "
+                >
+                  {{ deviation(milestone)?.label }}
+                </span>
 
-              <!-- Факт відмічають у день, коли він стався: один дотик замість
-                   календаря. -->
-              <button
-                v-else-if="!dateValue(row.fact)"
-                type="button"
-                class="quick"
-                @click="setToday(row.fact)"
-              >
-                сьогодні
-              </button>
+                <button
+                  v-else-if="canMarkToday(milestone)"
+                  type="button"
+                  class="quick"
+                  @click="setToday(line.field)"
+                >
+                  <AppIcon name="check" />
+                  сьогодні
+                </button>
+              </template>
             </template>
           </div>
-        </template>
+        </section>
       </div>
     </div>
 
@@ -670,159 +471,107 @@ function save(): void {
 
 /* ── Строки ────────────────────────────────────────────────────── */
 
-.dates__head {
+.figs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px 0;
+  margin: 4px 0 8px;
+}
+
+.fig {
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  margin: 0;
+  padding: 0 18px;
+  border-left: 1px solid var(--line);
+}
+
+.fig:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.fig__label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.fig__value {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  gap: 0 5px;
+  margin: 0;
+  color: var(--ink);
 }
 
-.dates__span {
-  font-size: 12px;
+.fig__num {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.fig__unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.fig__hint {
+  margin: 0;
+  font-size: 11.5px;
   color: var(--ink-faint);
   font-variant-numeric: tabular-nums;
 }
 
-.dates__strong {
-  font-weight: 600;
+.fig--muted .fig__num {
+  color: var(--ink-soft);
+}
+
+.fig--good .fig__num,
+.fig--good .fig__unit {
+  color: var(--brand-strong);
+}
+
+.fig--warn .fig__num,
+.fig--warn .fig__unit {
+  color: var(--amber);
+}
+
+.fig--late .fig__num,
+.fig--late .fig__unit {
+  color: var(--danger);
+}
+
+.figs__note {
+  margin-bottom: 4px;
+  font-size: 13px;
   color: var(--ink-muted);
 }
 
-/* ── Шкала ─────────────────────────────────────────────────────── */
-
-.tl {
+.stages {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 6px 12px;
-  padding: 4px 0 2px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.tl__names,
-.tl__area {
+.stage {
   display: grid;
-  grid-template-rows: 20px 20px;
-  gap: 4px;
-  align-items: center;
+  align-content: start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
 }
 
-.tl__names {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--ink-faint);
-}
-
-/* Смуги живуть на спільній осі — «сьогодні» тому й можна провести наскрізь. */
-.tl__area {
-  position: relative;
-  min-width: 0;
-}
-
-.tl__track {
-  position: relative;
-  height: 9px;
-  border-radius: 999px;
-  background: var(--paper-sunk);
-}
-
-.tl__bar {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  min-width: 7px;
-  border-radius: 999px;
-  transition:
-    left 0.35s var(--ease),
-    width 0.35s var(--ease);
-}
-
-/* План — опора, а не подія: він тримає фон, по якому міряють факт. */
-.tl__bar--plan {
-  background: var(--line-strong);
-}
-
-.tl__bar--fact {
-  background: var(--brand);
-}
-
-.tl__bar--late {
-  background: var(--danger);
-}
-
-/* Робота ще йде: у смуги немає правого краю, тож вона в штрихуванні. */
-.tl__bar--open {
-  background-image: repeating-linear-gradient(
-    115deg,
-    rgb(255 255 255 / 42%) 0 3px,
-    transparent 3px 7px
-  );
-  border-top-right-radius: 2px;
-  border-bottom-right-radius: 2px;
-}
-
-.tl__none {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  font-size: 11px;
-  color: var(--ink-faint);
-}
-
-/* Пунктир, а не суцільна лінія: суцільну читають як межу смуги. */
-.tl__now {
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  width: 1px;
-  background: repeating-linear-gradient(180deg, var(--ink-muted) 0 3px, transparent 3px 6px);
-}
-
-.tl__now::before {
-  content: '';
-  position: absolute;
-  top: -3px;
-  left: -2px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink);
-}
-
-.tl__axis {
-  position: relative;
-  grid-column: 2;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Підпис риски — без нього вертикальна лінія просто незрозуміла. */
-.tl__nowtag {
-  position: absolute;
-  top: 0;
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--ink-muted);
-}
-
-/* Крайню дату не прибираємо, а ховаємо: інакше вісь стрибає. */
-.is-away {
-  visibility: hidden;
-}
-
-.dates {
-  display: grid;
-  grid-template-columns: minmax(88px, auto) minmax(120px, 1fr) minmax(120px, 1fr);
-  align-items: center;
-  gap: 6px 16px;
-}
-
-.dates__col {
+.stage__title {
+  margin-bottom: 4px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -830,21 +579,27 @@ function save(): void {
   color: var(--ink-faint);
 }
 
-.dates__row {
-  font-size: 13px;
-  color: var(--ink-muted);
-}
-
-.dates__cell {
-  display: flex;
+.stage__row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-width: 0;
+  min-height: 34px;
 }
 
-/* Відкритий редактор забирає всю ширину клітинки — кнопкам поруч тісно. */
-.dates__cell--edit {
-  display: block;
+.stage__row--edit {
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  padding: 4px 0;
+}
+
+.stage__row--edit .stage__kind {
+  padding-top: 9px;
+}
+
+.stage__kind {
+  font-size: 12px;
+  color: var(--ink-faint);
 }
 
 /* ── Значення ──────────────────────────────────────────────────── */
@@ -917,7 +672,10 @@ function save(): void {
 
 /* Швидка дія коло порожнього факту. */
 .quick {
+  display: inline-flex;
   flex: none;
+  align-items: center;
+  gap: 4px;
   padding: 3px 9px;
   border: 1px dashed var(--line-strong);
   border-radius: 999px;
@@ -929,6 +687,11 @@ function save(): void {
     border-color 0.16s var(--ease),
     background-color 0.16s var(--ease),
     color 0.16s var(--ease);
+}
+
+.quick :deep(.icon) {
+  width: 12px;
+  height: 12px;
 }
 
 .quick:hover {
@@ -956,9 +719,14 @@ function save(): void {
   font-size: 12px;
 }
 
-.chip--early {
+.chip--good {
   background: var(--brand-tint);
   color: var(--brand-strong);
+}
+
+.chip--neutral {
+  background: var(--paper-sunk);
+  color: var(--ink-muted);
 }
 
 .chip--late {
@@ -1069,19 +837,50 @@ function save(): void {
 }
 
 @container (width < 520px) {
-  .dates {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .stages {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  /* Колонки лишились дві — порожня клітинка під підпис рядка зайва. */
-  .dates__gap {
-    display: none;
+  .figs {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
   }
 
-  .dates__row {
-    grid-column: 1 / -1;
-    font-weight: 600;
+  .fig {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 9px 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .fig:first-child {
+    padding-top: 0;
+    border-top: 0;
+  }
+
+  .fig__label {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 13px;
     color: var(--ink);
+  }
+
+  .fig__hint {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .fig__value {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    justify-content: flex-end;
+  }
+
+  .fig__num {
+    font-size: 22px;
   }
 }
 </style>

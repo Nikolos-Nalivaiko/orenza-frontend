@@ -80,7 +80,7 @@ function percent(value: number): string {
           <template v-if="row.object.finished_at === null">Без дедлайну</template>
           <template v-else>
             {{ formatDay(row.object.finished_at) }} ·
-            {{ formatDeadline(row.summary.daysLeft, row.summary.overdue) }}
+            {{ formatDeadline(row.summary.daysLeft, row.summary.overdue, row.summary.finishDrift) }}
           </template>
         </span>
       </div>

@@ -180,6 +180,23 @@ describe('objectSummary', () => {
     expect(objectSummary(closed, TODAY).overdue).toBe(false)
     expect(objectSummary(makeObject({ finished_at: null }), TODAY).daysLeft).toBeNull()
   })
+
+  it('у зданого обʼєкта відхилення рахує від фактичної здачі, а не від сьогодні', () => {
+    const early = makeObject({
+      finished_at: '2026-08-28',
+      actual_finished_at: '2026-08-25',
+      status: { value: 'done', label: OBJECT_STATUS_LABELS.done },
+    })
+    const late = makeObject({
+      finished_at: '2026-08-10',
+      actual_finished_at: '2026-08-12',
+      status: { value: 'done', label: OBJECT_STATUS_LABELS.done },
+    })
+
+    expect(objectSummary(early, TODAY)).toMatchObject({ overdue: false, finishDrift: -3 })
+    expect(objectSummary(late, TODAY)).toMatchObject({ overdue: false, finishDrift: 2 })
+    expect(objectSummary(makeObject(), TODAY).finishDrift).toBeNull()
+  })
 })
 
 describe('readiness', () => {
@@ -326,6 +343,9 @@ describe('formatDeadline', () => {
     expect(formatDeadline(0, false)).toBe('Сьогодні')
     expect(formatDeadline(3, false)).toBe('Через 3 дні')
     expect(formatDeadline(-5, true)).toBe('Прострочено 5 днів')
-    expect(formatDeadline(-2, false)).toBe('Завершено із запізненням 2 дні')
+    expect(formatDeadline(-2, false)).toBe('Завершено')
+    expect(formatDeadline(-30, false, 2)).toBe('Здано із запізненням 2 дні')
+    expect(formatDeadline(-30, false, -3)).toBe('Здано на 3 дні раніше')
+    expect(formatDeadline(-30, false, 0)).toBe('Здано в строк')
   })
 })

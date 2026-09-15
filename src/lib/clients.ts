@@ -12,7 +12,7 @@
 
 import { parseAmount } from '@/lib/amount'
 import { comparePayments, objectFinance, type Payment } from '@/lib/finance'
-import { daysBetween, type Client, type ClientType, type ConstructionObject } from '@/lib/objects'
+import { periodDays, type Client, type ClientType, type ConstructionObject } from '@/lib/objects'
 import { formatPhone, isBlankPhone, isCompletePhone } from '@/lib/phone'
 import { isEmail, PHONE_ERROR } from '@/lib/validation'
 
@@ -206,7 +206,7 @@ export function clientProfile(
 
   return {
     since,
-    days: since === null ? null : daysBetween(since, today),
+    days: since === null ? null : periodDays(since, today),
     last,
     average: live === 0 ? 0 : totals.client / live,
     payments,

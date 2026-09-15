@@ -237,6 +237,58 @@ export function daysBetween(from: string, to: string): number | null {
   return Math.round((end.getTime() - start.getTime()) / 86_400_000)
 }
 
+export const FUTURE_FACT = 'Фактична дата не може бути пізніше за сьогодні'
+
+export function isFutureFact(day: string, today: string): boolean {
+  return day !== '' && today !== '' && day > today
+}
+
+const briefDay = new Intl.DateTimeFormat('uk-UA', { day: 'numeric', month: 'short' })
+const briefMonth = new Intl.DateTimeFormat('uk-UA', { month: 'short' })
+
+function withYear(text: string, iso: string, today: string): string {
+  return iso.slice(0, 4) === today.slice(0, 4) ? text : `${text} ${iso.slice(0, 4)}`
+}
+
+export function formatDayBrief(iso: string, today: string): string {
+  const date = parseDay(iso)
+
+  return date === null ? '' : withYear(briefDay.format(date), iso, today)
+}
+
+export function formatPeriodBrief(from: string, to: string, today: string): string {
+  const start = parseDay(from)
+  const end = parseDay(to)
+
+  if (start === null || end === null) {
+    return ''
+  }
+
+  if (from === to) {
+    return formatDayBrief(from, today)
+  }
+
+  if (from.slice(0, 7) === to.slice(0, 7)) {
+    return withYear(
+      `${start.getUTCDate()}–${end.getUTCDate()} ${briefMonth.format(end)}`,
+      to,
+      today,
+    )
+  }
+
+  if (from.slice(0, 4) === to.slice(0, 4)) {
+    return withYear(`${briefDay.format(start)} — ${briefDay.format(end)}`, to, today)
+  }
+
+  return `${formatDayBrief(from, today)} — ${formatDayBrief(to, today)}`
+}
+
+export function periodDays(from: string, to: string): number | null {
+  const days = daysBetween(from, to)
+
+  return days === null || days < 0 ? null : days + 1
+}
+
 /** 1 день, 2–4 дні, 5+ днів. */
 export function formatDays(days: number): string {
   const abs = Math.abs(days)
@@ -251,13 +303,13 @@ export function formatDays(days: number): string {
 
 /** Підпис під парою дат: «Триває 128 днів» або «Один день». */
 export function formatSpan(from: string, to: string): string {
-  const days = daysBetween(from, to)
+  const days = periodDays(from, to)
 
-  if (days === null || days < 0) {
+  if (days === null) {
     return ''
   }
 
-  return days === 0 ? 'Один день' : `Триває ${formatDays(days)}`
+  return days === 1 ? 'Один день' : `Триває ${formatDays(days)}`
 }
 
 /**
@@ -296,7 +348,7 @@ export function formatDiscount(percent: number | null, amount: number | null): s
 
 /* ── Валідація ─────────────────────────────────────────────────── */
 
-export function validateObjectForm(form: ObjectForm): ObjectErrors {
+export function validateObjectForm(form: ObjectForm, today: string = todayIso()): ObjectErrors {
   const errors: ObjectErrors = {}
 
   const name = form.name.trim()
@@ -337,6 +389,14 @@ export function validateObjectForm(form: ObjectForm): ObjectErrors {
 
   if (form.factEndDate !== '' && form.factStartDate === '') {
     errors.factStartDate = 'Спочатку вкажіть фактичний початок'
+  }
+
+  if (isFutureFact(form.factStartDate, today)) {
+    errors.factStartDate = FUTURE_FACT
+  }
+
+  if (isFutureFact(form.factEndDate, today)) {
+    errors.factEndDate = FUTURE_FACT
   }
 
   // Статус і фактичні дати мають не сперечатись: «в роботі» без початку та

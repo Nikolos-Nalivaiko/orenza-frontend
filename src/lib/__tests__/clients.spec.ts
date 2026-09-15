@@ -207,7 +207,7 @@ describe('clientProfile', () => {
     ])
 
     expect(profile.since).toBe('2026-03-04')
-    expect(profile.days).toBe(182)
+    expect(profile.days).toBe(183)
     expect(profile.last?.name).toBe('Котеджі «Липки»')
   })
 
