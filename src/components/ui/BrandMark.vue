@@ -37,7 +37,7 @@ withDefaults(defineProps<{ tone?: 'light' | 'dark'; compact?: boolean }>(), {
   height: 34px;
   border-radius: 11px;
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .brand__glyph svg {
@@ -58,6 +58,10 @@ withDefaults(defineProps<{ tone?: 'light' | 'dark'; compact?: boolean }>(), {
 
 .brand--light {
   color: #fff;
+}
+
+.brand--light .brand__glyph {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 16%);
 }
 
 .brand--dark {

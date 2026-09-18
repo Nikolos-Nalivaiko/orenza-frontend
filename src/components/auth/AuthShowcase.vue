@@ -179,7 +179,7 @@ const acts = useCountUp(37)
   inset: -20%;
   background: radial-gradient(
     38% 38% at calc(var(--mx) * 1%) calc(var(--my) * 1%),
-    rgb(56 176 0 / 26%) 0%,
+    rgb(92 201 58 / 26%) 0%,
     transparent 70%
   );
   transition: opacity 0.4s var(--ease);
@@ -209,7 +209,7 @@ const acts = useCountUp(37)
 .showcase__title em {
   display: block;
   font-style: normal;
-  color: var(--brand-soft);
+  color: var(--brand-bright);
 }
 
 .showcase__sub {
@@ -293,8 +293,8 @@ const acts = useCountUp(37)
 .card__stage {
   padding: 5px 10px;
   border-radius: 999px;
-  background: rgb(56 176 0 / 16%);
-  color: var(--brand-soft);
+  background: rgb(92 201 58 / 16%);
+  color: var(--brand-bright);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -331,7 +331,7 @@ const acts = useCountUp(37)
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--brand-strong), var(--brand-soft));
+  background: var(--brand-bright);
   transition: width 0.7s var(--ease);
 }
 
@@ -366,7 +366,7 @@ const acts = useCountUp(37)
 
 .card__dot--on {
   width: 38px;
-  background: var(--brand);
+  background: var(--brand-bright);
 }
 
 .swap-enter-active,

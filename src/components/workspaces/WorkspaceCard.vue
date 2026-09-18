@@ -103,7 +103,7 @@ const created = computed(() => formatCreatedAt(props.workspace.created_at))
 
 .card--company .card__mono {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .card__badges {
@@ -184,7 +184,7 @@ const created = computed(() => formatCreatedAt(props.workspace.created_at))
 
 .card:hover .card__go {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
   transform: translateX(3px);
 }
 </style>

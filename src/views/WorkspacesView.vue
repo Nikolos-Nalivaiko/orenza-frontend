@@ -79,13 +79,15 @@ async function submit(form: WorkspaceForm): Promise<void> {
   }
 
   creating.value = false
-  await workspaces.select(created.id)
-  await router.push({ name: 'dashboard' })
+  await router.push({ name: 'dashboard', params: { workspace: created.slug } })
 }
 
 async function open(id: number): Promise<void> {
-  await workspaces.select(id)
-  await router.push({ name: 'dashboard' })
+  const target = workspaces.items.find((item) => item.id === id)
+
+  if (target !== undefined) {
+    await router.push({ name: 'dashboard', params: { workspace: target.slug } })
+  }
 }
 
 async function signOut(): Promise<void> {
@@ -583,7 +585,7 @@ async function signOut(): Promise<void> {
 
 .add:hover .add__plus {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .add__plus svg {

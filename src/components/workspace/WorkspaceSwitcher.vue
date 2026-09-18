@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, useTemplateRef } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { useDismissable } from '@/composables/useDismissable'
+import { switchTarget } from '@/lib/navigation'
 import { monogram, WORKSPACE_TYPE_LABELS } from '@/lib/workspaces'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
@@ -10,6 +11,7 @@ defineProps<{ collapsed: boolean }>()
 
 const workspaces = useWorkspacesStore()
 const router = useRouter()
+const route = useRoute()
 
 const root = useTemplateRef<HTMLElement>('root')
 const open = ref(false)
@@ -24,9 +26,22 @@ const typeLabel = computed(() =>
 async function pick(id: number): Promise<void> {
   open.value = false
 
-  if (id !== workspaces.currentId) {
-    await workspaces.select(id)
+  const target = workspaces.items.find((item) => item.id === id)
+
+  if (target === undefined || id === workspaces.currentId) {
+    return
   }
+
+  await router.push(
+    switchTarget(
+      {
+        name: typeof route.name === 'string' ? route.name : null,
+        params: route.params,
+        section: typeof route.meta.section === 'string' ? route.meta.section : null,
+      },
+      target.slug,
+    ),
+  )
 }
 
 async function toSettings(): Promise<void> {

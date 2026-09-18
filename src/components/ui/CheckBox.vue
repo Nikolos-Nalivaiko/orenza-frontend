@@ -75,7 +75,7 @@ const id = useId()
 .check__input:checked + .check__box {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .check__input:focus-visible + .check__box {

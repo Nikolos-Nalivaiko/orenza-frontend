@@ -132,7 +132,7 @@ const late = computed(() => isLate(payment.value, todayIso()))
 
 /* Статус видно, не читаючи текст: гроші прийшли — зелений, прострочені — червоний. */
 .prow--paid .status {
-  border-color: rgb(56 176 0 / 40%);
+  border-color: rgb(2 116 0 / 40%);
   background-color: var(--brand-tint);
   color: var(--brand-strong);
 }

@@ -630,7 +630,7 @@ function saveDiscount(): void {
 
 .disc__ok:hover {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .disc__no:hover {

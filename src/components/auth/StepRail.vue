@@ -137,7 +137,7 @@ defineEmits<{ jump: [index: number] }>()
 .rail__item--done .rail__dot {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .rail__item--done .rail__label {

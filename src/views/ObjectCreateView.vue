@@ -835,7 +835,7 @@ async function toObjects(): Promise<void> {
   height: 46px;
   border-radius: 15px;
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .done__icon :deep(.icon) {

@@ -268,7 +268,7 @@ async function toWorkspaces(): Promise<void> {
   height: 32px;
   border-radius: 10px;
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .side__glyph svg {

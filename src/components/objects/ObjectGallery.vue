@@ -450,7 +450,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', onPaste))
 .ghost--brand {
   border-color: transparent;
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .ghost--brand:hover:not(:disabled) {
@@ -750,7 +750,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', onPaste))
 .drop:hover .drop__icon,
 .drop--over .drop__icon {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .drop__text {

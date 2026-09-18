@@ -194,7 +194,7 @@ function isOn(value: ObjectStatus): boolean {
 }
 
 .search__input:focus {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
@@ -291,7 +291,7 @@ function isOn(value: ObjectStatus): boolean {
 }
 
 .chip--on .chip__count {
-  background: rgb(56 176 0 / 18%);
+  background: rgb(2 116 0 / 18%);
 }
 
 .chip--late :deep(.icon) {

@@ -296,7 +296,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .client__shell:focus-within {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 4px var(--brand-glow);
 }
 
@@ -548,7 +548,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 .opt--on .opt__mono--new {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .opt__mono--new :deep(.icon) {

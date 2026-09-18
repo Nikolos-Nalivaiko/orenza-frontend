@@ -602,7 +602,7 @@ onBeforeUnmount(() => {
 .share__input:checked + .share__box {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .share__input:focus-visible + .share__box {

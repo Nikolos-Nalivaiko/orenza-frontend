@@ -150,6 +150,25 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     }
   }
 
+  async function enter(slug: string): Promise<Workspace | null> {
+    let target = items.value.find((item) => item.slug === slug)
+
+    if (target === undefined) {
+      await fetchAll()
+      target = items.value.find((item) => item.slug === slug)
+    }
+
+    if (target === undefined) {
+      return null
+    }
+
+    if (target.id !== currentId.value) {
+      await select(target.id)
+    }
+
+    return currentId.value === target.id ? target : null
+  }
+
   function clear(): void {
     items.value = []
     currentId.value = null
@@ -173,6 +192,7 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     fetchAll,
     create,
     select,
+    enter,
     clear,
   }
 })

@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
 
 .type--on .type__icon {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .type__icon :deep(.icon) {
@@ -394,7 +394,7 @@ onBeforeUnmount(() => {
 .type--on .dot {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .dot :deep(.icon) {

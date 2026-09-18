@@ -131,7 +131,7 @@ const filters = defineModel<ServiceFilters>({ required: true })
 }
 
 .search__input:focus {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 

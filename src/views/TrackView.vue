@@ -455,7 +455,7 @@ onBeforeUnmount(() => controller?.abort())
 
 .shot__status--in_progress {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .shot__status--done {

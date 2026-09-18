@@ -299,7 +299,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 .wpick__btn:focus-visible,
 .wpick__btn[aria-expanded='true'] {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
   outline: none;
 }
@@ -379,7 +379,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .menu__search:focus-within {
-  border-color: rgb(56 176 0 / 45%);
+  border-color: rgb(2 116 0 / 45%);
 }
 
 .menu__icon {
@@ -462,7 +462,7 @@ function onKeydown(event: KeyboardEvent): void {
 
 .opt--on .opt__mono--new {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .opt__mono--new :deep(.icon) {

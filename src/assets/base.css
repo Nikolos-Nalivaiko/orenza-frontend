@@ -1,12 +1,14 @@
-/* Дизайн-токени Orenza. Зелений #38B000 — головний акцент, решта палітри
+/* Дизайн-токени Orenza. Зелений #027400 — головний акцент, решта палітри
    побудована навколо теплого паперового фону і графітової панелі. */
 
 :root {
-  --brand: #38b000;
-  --brand-strong: #2c8c00;
-  --brand-soft: #61cf30;
-  --brand-tint: #e8f7dd;
-  --brand-glow: rgb(56 176 0 / 22%);
+  --brand: #027400;
+  --brand-strong: #015c00;
+  --brand-soft: #0b7e09;
+  --brand-bright: #5cc93a;
+  --brand-tint: #e2f0df;
+  --brand-glow: rgb(2 116 0 / 20%);
+  --on-brand: #fff;
 
   --ink: #0c110e;
   --ink-soft: #1a221c;
@@ -31,11 +33,11 @@
    * (найгірша сусідня пара — ΔE 24.7). Кольори призначаються слотами
    * 1, 2, 3, 4 і ніколи не «прокручуються» по колу.
    */
-  --c-1: #2c8c00;
+  --c-1: #027400;
   --c-2: #4a3aa7;
   --c-3: #eb6834;
   --c-4: #2a78d6;
-  --c-1-soft: rgb(44 140 0 / 14%);
+  --c-1-soft: rgb(2 116 0 / 14%);
   --c-2-soft: rgb(74 58 167 / 14%);
   --c-3-soft: rgb(235 104 52 / 14%);
   --c-4-soft: rgb(42 120 214 / 14%);
@@ -176,7 +178,7 @@ a {
 
 .btn--primary {
   --btn-bg: var(--brand);
-  --btn-fg: #08210a;
+  --btn-fg: var(--on-brand);
 
   box-shadow: 0 14px 28px -16px var(--brand-glow);
 }
@@ -251,7 +253,7 @@ a {
 }
 
 .ctl:focus {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 

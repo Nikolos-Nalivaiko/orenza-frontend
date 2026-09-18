@@ -57,6 +57,22 @@ export function isAllowed(item: NavItem, features: WorkspaceFeatures): boolean {
   return item.requires === undefined || features[item.requires]
 }
 
+export interface SwitchFrom {
+  name: string | null
+  params: Record<string, unknown>
+  section: string | null
+}
+
+export function switchTarget(
+  from: SwitchFrom,
+  slug: string,
+): { name: string; params: { workspace: string } } {
+  const nested = Object.keys(from.params).some((key) => key !== 'workspace')
+  const name = nested ? (from.section ?? 'dashboard') : (from.name ?? 'dashboard')
+
+  return { name, params: { workspace: slug } }
+}
+
 export function navFor(features: WorkspaceFeatures): NavGroup[] {
   return NAV.map((group) => ({
     ...group,

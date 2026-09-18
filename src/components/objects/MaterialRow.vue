@@ -240,7 +240,7 @@ const profit = computed(() => materialProfit(material.value))
 .ok__input:checked + .ok__box {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .ok__input:focus-visible + .ok__box {

@@ -13,7 +13,9 @@ import {
 
 type Series = 'paid' | 'expected' | 'late'
 
-const props = defineProps<{ months: MonthIncome[] }>()
+const props = withDefaults(defineProps<{ months: MonthIncome[]; height?: number }>(), {
+  height: 300,
+})
 
 const SERIES: { key: Series; label: string }[] = [
   { key: 'paid', label: 'Отримано' },
@@ -21,7 +23,6 @@ const SERIES: { key: Series; label: string }[] = [
   { key: 'late', label: 'Прострочено' },
 ]
 
-const PLOT = 300
 const TOP = 12
 const AXIS = 34
 const LEFT = 54
@@ -42,7 +43,7 @@ const total = (item: MonthIncome): number => item.paid + item.expected + item.la
 const scale = computed(() => niceScale(Math.max(...props.months.map(total), 0), 4))
 
 function y(value: number): number {
-  return TOP + ((scale.value.max - value) / (scale.value.max || 1)) * PLOT
+  return TOP + ((scale.value.max - value) / (scale.value.max || 1)) * props.height
 }
 
 function center(index: number): number {
@@ -93,7 +94,7 @@ const nowIndex = computed(() =>
   ),
 )
 
-const svgHeight = TOP + PLOT + AXIS
+const svgHeight = computed(() => TOP + props.height + AXIS)
 
 const current = computed(() => (hover.value === null ? null : (props.months[hover.value] ?? null)))
 
@@ -185,7 +186,7 @@ function onKey(event: KeyboardEvent): void {
             :x="LEFT + hover * band + 2"
             :y="TOP - 6"
             :width="band - 4"
-            :height="PLOT + 6"
+            :height="height + 6"
             rx="8"
           />
 
@@ -208,7 +209,7 @@ function onKey(event: KeyboardEvent): void {
               v-show="Math.abs(index - nowIndex) % labelEvery === 0"
               :key="item.month"
               :x="center(index)"
-              :y="TOP + PLOT + 18"
+              :y="TOP + height + 18"
               text-anchor="middle"
               :class="{ 'xaxis--now': item.current, 'xaxis--hover': hover === index }"
             >
@@ -231,7 +232,7 @@ function onKey(event: KeyboardEvent): void {
             :x="LEFT + index * band"
             :y="0"
             :width="band"
-            :height="TOP + PLOT"
+            :height="TOP + height"
             tabindex="0"
             :aria-label="`${formatMonthLong(item.month)}: отримано ${formatAmount(item.paid)} ₴, очікується ${formatAmount(item.expected)} ₴, прострочено ${formatAmount(item.late)} ₴`"
             @pointerenter="hover = index"

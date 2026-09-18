@@ -188,7 +188,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
 }
 
 .copy__field:focus {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
@@ -215,7 +215,7 @@ onBeforeUnmount(() => window.clearTimeout(copiedTimer))
 .copy__btn--done,
 .copy__btn--done:hover {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .copy__btn :deep(.icon) {

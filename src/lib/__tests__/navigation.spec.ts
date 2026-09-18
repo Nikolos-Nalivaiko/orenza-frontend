@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAllowed, navFor, NAV_ITEMS, findNavItem } from '../navigation'
+import { isAllowed, navFor, NAV_ITEMS, findNavItem, switchTarget } from '../navigation'
 import { workspaceFeatures, type Workspace } from '../workspaces'
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
@@ -74,5 +74,29 @@ describe('workspaceFeatures', () => {
     delete (stale as Partial<Workspace>).features
 
     expect(workspaceFeatures(stale)).toEqual({ team: false })
+  })
+})
+
+describe('switchTarget', () => {
+  it('зі списку веде на той самий розділ іншого простору', () => {
+    expect(
+      switchTarget({ name: 'finance', params: { workspace: 'acme' }, section: null }, 'nord'),
+    ).toEqual({ name: 'finance', params: { workspace: 'nord' } })
+  })
+
+  it('з картки веде на список розділу: обʼєкта з цим id в іншому просторі немає', () => {
+    expect(
+      switchTarget(
+        { name: 'object', params: { workspace: 'acme', id: '12' }, section: 'objects' },
+        'nord',
+      ),
+    ).toEqual({ name: 'objects', params: { workspace: 'nord' } })
+  })
+
+  it('без розділу — на дашборд', () => {
+    expect(switchTarget({ name: null, params: {}, section: null }, 'nord')).toEqual({
+      name: 'dashboard',
+      params: { workspace: 'nord' },
+    })
   })
 })

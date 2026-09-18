@@ -1,4 +1,10 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import {
+  createRouter,
+  createWebHistory,
+  type LocationQuery,
+  type RouteLocationRaw,
+  type RouteRecordRaw,
+} from 'vue-router'
 import type { WorkspaceFeatures } from '@/lib/workspaces'
 import { NAV_FOOTER, NAV } from '@/lib/navigation'
 import { useAuthStore } from '@/stores/auth'
@@ -21,6 +27,16 @@ const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...N
     component: () => import('@/views/SectionView.vue'),
     meta: { title: item.label },
   }))
+
+function toCurrent(path: string, to: { query: LocationQuery; hash: string }): RouteLocationRaw {
+  const slug = useWorkspacesStore().current?.slug
+
+  if (slug === undefined) {
+    return { name: 'workspaces' }
+  }
+
+  return { path: `/${slug}${path}`, query: to.query, hash: to.hash }
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -55,7 +71,15 @@ const router = createRouter({
       meta: { requiresAuth: true, title: 'Робочі простори' },
     },
     {
-      path: '/w',
+      path: '/w/:rest(.*)*',
+      redirect: (to) => {
+        const rest = to.params.rest
+
+        return toCurrent(Array.isArray(rest) && rest.length > 0 ? `/${rest.join('/')}` : '', to)
+      },
+    },
+    {
+      path: '/:workspace',
       component: () => import('@/layouts/WorkspaceLayout.vue'),
       meta: { requiresAuth: true, requiresWorkspace: true },
       children: [
@@ -155,13 +179,11 @@ const router = createRouter({
         ...sections,
       ],
     },
-    // Стара адреса простору — лишаємо, щоб збережені посилання не ламались.
-    { path: '/workspace', redirect: { name: 'dashboard' } },
     { path: '/:pathMatch(.*)*', redirect: { name: 'login' } },
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   useProgressStore().start()
@@ -174,17 +196,22 @@ router.beforeEach((to) => {
     return { name: 'workspaces' }
   }
 
-  // Всередину простору не пускаємо, поки його не обрано.
-  const workspaces = useWorkspacesStore()
+  if (to.meta.requiresWorkspace !== true) {
+    return true
+  }
 
-  if (to.meta.requiresWorkspace === true && workspaces.current === null) {
+  const workspaces = useWorkspacesStore()
+  const slug = String(to.params.workspace ?? '')
+  const workspace = await workspaces.enter(slug)
+
+  if (workspace === null) {
     return { name: 'workspaces' }
   }
 
   const requires = to.meta.requires
 
   if (requires !== undefined && !workspaces.features[requires]) {
-    return { name: 'dashboard' }
+    return { name: 'dashboard', params: { workspace: workspace.slug } }
   }
 
   return true

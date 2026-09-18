@@ -162,7 +162,7 @@ defineExpose({ open })
 .dz__zone:hover:not(:disabled) .dz__icon,
 .dz__zone--over .dz__icon {
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .dz__text {

@@ -166,7 +166,7 @@ function toggleStatus(status: EmployeeStatusFilter): void {
 }
 
 .search__input:focus {
-  border-color: rgb(56 176 0 / 55%);
+  border-color: rgb(2 116 0 / 55%);
   box-shadow: 0 0 0 3px var(--brand-glow);
 }
 
@@ -240,7 +240,7 @@ function toggleStatus(status: EmployeeStatusFilter): void {
 }
 
 .chip--free.chip--on .chip__count {
-  background: rgb(56 176 0 / 18%);
+  background: rgb(2 116 0 / 18%);
   color: var(--brand-strong);
 }
 

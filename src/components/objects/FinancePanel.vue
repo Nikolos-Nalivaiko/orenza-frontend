@@ -309,7 +309,7 @@ function remove(id: string): void {
 }
 
 .tile--profit {
-  border-color: rgb(56 176 0 / 30%);
+  border-color: rgb(2 116 0 / 30%);
   background: var(--brand-tint);
 }
 

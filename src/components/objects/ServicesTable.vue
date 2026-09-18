@@ -528,7 +528,7 @@ function unitPrice(price: number | null): string {
 .tick__input:indeterminate + .tick__box {
   border-color: var(--brand);
   background: var(--brand);
-  color: #08210a;
+  color: var(--on-brand);
 }
 
 .tick__input:focus-visible + .tick__box {
