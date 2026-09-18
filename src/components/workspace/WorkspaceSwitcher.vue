@@ -29,6 +29,11 @@ async function pick(id: number): Promise<void> {
   }
 }
 
+async function toSettings(): Promise<void> {
+  open.value = false
+  await router.push({ name: 'settings-workspace' })
+}
+
 async function toAll(): Promise<void> {
   open.value = false
   await router.push({ name: 'workspaces' })
@@ -82,6 +87,11 @@ async function toAll(): Promise<void> {
         </button>
 
         <hr class="hairline" />
+
+        <button type="button" class="menu__all" role="menuitem" @click="toSettings">
+          <AppIcon name="settings" />
+          Налаштування простору
+        </button>
 
         <button type="button" class="menu__all" role="menuitem" @click="toAll">
           <AppIcon name="swap" />

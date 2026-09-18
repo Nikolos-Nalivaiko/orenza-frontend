@@ -40,14 +40,12 @@ export const NAV: NavGroup[] = [
     items: [
       { name: 'clients', label: 'Замовники', icon: 'user' },
       { name: 'team', label: 'Команда', icon: 'team', requires: 'team' },
-      { name: 'finance', label: 'Фінанси', icon: 'wallet', soon: true },
+      { name: 'finance', label: 'Фінанси', icon: 'wallet' },
     ],
   },
 ]
 
-export const NAV_FOOTER: NavItem[] = [
-  { name: 'settings', label: 'Налаштування', icon: 'settings', soon: true },
-]
+export const NAV_FOOTER: NavItem[] = [{ name: 'settings', label: 'Налаштування', icon: 'settings' }]
 
 export const NAV_ITEMS: NavItem[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
 

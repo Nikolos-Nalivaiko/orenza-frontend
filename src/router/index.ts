@@ -11,7 +11,7 @@ import LoginView from '@/views/LoginView.vue'
  * справжні маршрути: адреса, заголовок і активний пункт меню працюють.
  */
 /** Розділи з власним екраном — заглушка їх не стосується. */
-const READY = ['dashboard', 'objects', 'clients', 'team', 'schedule']
+const READY = ['dashboard', 'objects', 'clients', 'team', 'schedule', 'finance', 'settings']
 
 const sections: RouteRecordRaw[] = [...NAV.flatMap((group) => group.items), ...NAV_FOOTER]
   .filter((item) => !READY.includes(item.name))
@@ -125,6 +125,31 @@ const router = createRouter({
             subtitle: 'Загальна інформація про будівельний обʼєкт',
             // Розділ меню, який лишається активним на вкладених екранах.
             section: 'objects',
+          },
+        },
+        {
+          path: 'finance',
+          name: 'finance',
+          component: () => import('@/views/FinanceView.vue'),
+          meta: {
+            title: 'Фінанси',
+            subtitle: 'Надходження, прибутковість обʼєктів і борги замовників',
+          },
+        },
+        {
+          path: 'settings',
+          name: 'settings',
+          component: () => import('@/views/SettingsAccountView.vue'),
+          meta: { title: 'Налаштування акаунта', subtitle: 'Профіль, пароль і видалення акаунта' },
+        },
+        {
+          path: 'settings/workspace',
+          name: 'settings-workspace',
+          component: () => import('@/views/SettingsWorkspaceView.vue'),
+          meta: {
+            title: 'Налаштування простору',
+            subtitle: 'Назва, тип, експорт даних і видалення простору',
+            section: 'settings',
           },
         },
         ...sections,

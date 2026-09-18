@@ -180,6 +180,7 @@ async function toWorkspaces(): Promise<void> {
         v-for="item in NAV_FOOTER"
         :key="item.name"
         class="item"
+        :class="{ 'item--section': item.name === section }"
         :to="{ name: item.name }"
         :title="collapsed ? item.label : undefined"
         @click="emit('navigate')"
