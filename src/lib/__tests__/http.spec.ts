@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, ApiError, API_URL, setAuthToken, upload } from '@/lib/http'
+import { api, ApiError, API_URL, download, onUnauthorized, setAuthToken, upload } from '@/lib/http'
 
 function respond(body: unknown, status = 200): Response {
   return new Response(body === null ? null : JSON.stringify(body), {
@@ -21,6 +21,7 @@ function mockFetch(response: Response | Error | DOMException): ReturnType<typeof
 afterEach(() => {
   vi.unstubAllGlobals()
   setAuthToken(null)
+  onUnauthorized(null)
 })
 
 describe('request', () => {
@@ -94,6 +95,64 @@ describe('request', () => {
     mockFetch(new Response(null, { status: 204 }))
 
     await expect(api.delete('/workspaces/1')).resolves.toBeUndefined()
+  })
+
+  it('DELETE може нести тіло', async () => {
+    const fetchMock = mockFetch(respond({ data: null }))
+
+    await api.delete('/profile', { body: { password: 'secret' } })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+
+    expect(init.method).toBe('DELETE')
+    expect(init.body).toBe('{"password":"secret"}')
+  })
+
+  it('401 із відкликаним токеном повідомляє про завершену сесію', async () => {
+    const handler = vi.fn<() => void>()
+
+    mockFetch(respond({ message: 'Unauthenticated.' }, 401))
+    onUnauthorized(handler)
+    setAuthToken('revoked')
+
+    await expect(api.get('/auth/me')).rejects.toBeInstanceOf(ApiError)
+    expect(handler).toHaveBeenCalledOnce()
+  })
+
+  it('401 без токена не вважається завершеною сесією', async () => {
+    const handler = vi.fn<() => void>()
+
+    mockFetch(respond({ message: 'Невірний email або пароль.' }, 401))
+    onUnauthorized(handler)
+
+    await expect(api.post('/auth/login')).rejects.toBeInstanceOf(ApiError)
+    expect(handler).not.toHaveBeenCalled()
+  })
+})
+
+describe('download', () => {
+  it('повертає файл як Blob і підписує запит токеном', async () => {
+    const fetchMock = mockFetch(
+      new Response('PK', { status: 200, headers: { 'Content-Type': 'application/zip' } }),
+    )
+
+    setAuthToken('secret')
+
+    const blob = await download('/workspaces/acme/export')
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+
+    expect(await blob.text()).toBe('PK')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(`${API_URL}/workspaces/acme/export`)
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret')
+  })
+
+  it('помилку сервера перетворює на ApiError', async () => {
+    mockFetch(respond({ message: 'Забагато запитів.', error_code: 'too_many_requests' }, 429))
+
+    const error = await download('/workspaces/acme/export').catch((cause: unknown) => cause)
+
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).message).toBe('Забагато запитів.')
   })
 })
 

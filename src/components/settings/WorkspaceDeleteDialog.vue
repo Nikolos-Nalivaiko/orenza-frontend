@@ -11,7 +11,7 @@ const props = defineProps<{
   serverError: string | null
 }>()
 
-const emit = defineEmits<{ confirm: []; close: [] }>()
+const emit = defineEmits<{ confirm: [name: string]; close: [] }>()
 
 const typed = ref('')
 
@@ -19,7 +19,7 @@ const ready = computed(() => isWorkspaceDeleteConfirmed(typed.value, props.name)
 
 function submit(): void {
   if (ready.value && !props.saving) {
-    emit('confirm')
+    emit('confirm', typed.value)
   }
 }
 </script>

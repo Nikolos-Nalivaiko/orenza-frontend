@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
 import WorkspaceDeleteDialog from '@/components/settings/WorkspaceDeleteDialog.vue'
@@ -11,6 +12,7 @@ const emit = defineEmits<{ export: [] }>()
 
 const settings = useSettingsStore()
 const workspaces = useWorkspacesStore()
+const router = useRouter()
 
 const open = ref(false)
 const error = ref<string | null>(null)
@@ -25,14 +27,26 @@ function close(): void {
   }
 }
 
-async function confirm(): Promise<void> {
+async function confirm(name: string): Promise<void> {
   error.value = null
 
-  const result = await settings.deleteWorkspace()
+  const result = await settings.deleteWorkspace(name)
 
   if (!result.ok) {
-    error.value = result.message
+    error.value = result.fields.name ?? result.message
+
+    return
   }
+
+  open.value = false
+
+  const next = workspaces.items[0]
+
+  await router.replace(
+    next === undefined
+      ? { name: 'workspaces' }
+      : { name: 'dashboard', params: { workspace: next.slug } },
+  )
 }
 </script>
 
@@ -51,21 +65,9 @@ async function confirm(): Promise<void> {
       </div>
     </SettingsRow>
 
-    <SettingsRow
-      label="Видалити простір"
-      :hint="
-        settings.canManage
-          ? 'Потрібно буде ввести назву простору.'
-          : 'Видалити простір може лише його власник.'
-      "
-    >
+    <SettingsRow label="Видалити простір" hint="Потрібно буде ввести назву простору.">
       <div class="action">
-        <button
-          type="button"
-          class="btn btn--sm danger"
-          :disabled="!settings.canManage"
-          @click="open = true"
-        >
+        <button type="button" class="btn btn--sm danger" @click="open = true">
           Видалити простір…
         </button>
       </div>

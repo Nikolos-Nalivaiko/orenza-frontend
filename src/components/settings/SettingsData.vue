@@ -1,30 +1,32 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
 import { todayIso } from '@/lib/objects'
-import { exportFileName, exportFiles, exportSummary, sectionAnchor } from '@/lib/settings'
-import { useEmployeesStore } from '@/stores/employees'
-import { useObjectsStore } from '@/stores/objects'
+import { exportFileName, exportFiles, sectionAnchor } from '@/lib/settings'
 import { useSettingsStore } from '@/stores/settings'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
 const settings = useSettingsStore()
-const objects = useObjectsStore()
-const employees = useEmployeesStore()
 const workspaces = useWorkspacesStore()
 
 const error = ref<string | null>(null)
 
-const loading = computed(() => objects.isLoading || objects.isLoadingClients)
+const loading = computed(() => settings.summary === null && settings.summaryLoading)
 const exporting = computed(() => settings.pending === 'export')
 
-const summary = computed(() =>
-  exportSummary(objects.current, objects.clients, workspaces.hasTeam ? employees.items.length : 0),
+watch(
+  () => workspaces.current?.id,
+  () => void settings.loadSummary(),
+  { immediate: true },
 )
 
 const counts = computed(() => {
-  const value = summary.value
+  const value = settings.summary
+
+  if (value === null) {
+    return []
+  }
 
   return [
     {
@@ -41,9 +43,9 @@ const counts = computed(() => {
       note: '',
     },
     { key: 'payments', label: 'Платежі', value: value.payments, note: '' },
-    ...(workspaces.hasTeam
-      ? [{ key: 'team', label: 'Команда', value: value.employees, note: '' }]
-      : []),
+    ...(value.employees === null
+      ? []
+      : [{ key: 'team', label: 'Команда', value: value.employees, note: '' }]),
   ]
 })
 
@@ -62,7 +64,9 @@ async function download(): Promise<void> {
 
   const result = await settings.exportData()
 
-  if (!result.ok) {
+  if (result.ok) {
+    void settings.loadSummary()
+  } else {
     error.value = result.message
   }
 }
@@ -75,13 +79,24 @@ async function download(): Promise<void> {
     lead="Копія всіх даних простору в одному архіві. Доступна будь-коли, без звернення в підтримку."
   >
     <SettingsRow label="Обсяг даних" hint="Разом з архівними обʼєктами.">
-      <dl class="counts" :aria-busy="loading">
+      <p v-if="settings.summaryError && !settings.summary" class="counts__error">
+        {{ settings.summaryError }}
+        <button type="button" class="retry" @click="settings.loadSummary()">Повторити</button>
+      </p>
+
+      <dl v-else-if="loading" class="counts" aria-busy="true">
+        <div v-for="index in 5" :key="index" class="counts__row">
+          <dt><span class="counts__sk counts__sk--label" aria-hidden="true" /></dt>
+          <dd><span class="counts__sk" aria-hidden="true" /></dd>
+        </div>
+      </dl>
+
+      <dl v-else class="counts">
         <div v-for="item in counts" :key="item.key" class="counts__row">
           <dt>{{ item.label }}</dt>
           <dd>
             <span v-if="item.note" class="counts__note">{{ item.note }}</span>
-            <span v-if="loading" class="counts__sk" aria-hidden="true" />
-            <span v-else class="counts__value">{{ item.value }}</span>
+            <span class="counts__value">{{ item.value }}</span>
           </dd>
         </div>
       </dl>
@@ -89,7 +104,7 @@ async function download(): Promise<void> {
 
     <SettingsRow
       label="Склад архіву"
-      hint="CSV відкривається в Excel і Google Таблицях. Фото й обкладинки не входять."
+      hint="CSV із розділювачем «;» відкривається в Excel і Google Таблицях. Фото й обкладинки не входять."
     >
       <div class="archive">
         <p class="archive__name">{{ fileName }}</p>
@@ -162,6 +177,31 @@ async function download(): Promise<void> {
   color: var(--ink-faint);
 }
 
+.counts__error {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.retry {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+.retry:hover {
+  color: var(--ink);
+}
+
 .counts__value {
   min-width: 3ch;
   font-weight: 600;
@@ -175,6 +215,10 @@ async function download(): Promise<void> {
   height: 12px;
   border-radius: 4px;
   background: var(--paper-sunk);
+}
+
+.counts__sk--label {
+  width: 110px;
 }
 
 .archive {

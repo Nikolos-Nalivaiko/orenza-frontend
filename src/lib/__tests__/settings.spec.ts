@@ -12,9 +12,11 @@ import {
   formatUnits,
   groupOf,
   initialsOf,
+  profileErrorsFrom,
   isDeleteConfirmed,
   isPasswordFormTouched,
   isWorkspaceDeleteConfirmed,
+  passwordErrorsFrom,
   profileFormFrom,
   sameProfile,
   sameWorkspace,
@@ -149,6 +151,39 @@ describe('buildProfilePayload', () => {
 
   it('порожній телефон надсилає як null', () => {
     expect(buildProfilePayload(profile({ phone: '' })).phone).toBeNull()
+  })
+})
+
+describe('profileErrorsFrom', () => {
+  it('кладе помилки сервера під відповідні поля форми', () => {
+    expect(
+      profileErrorsFrom({
+        email: 'Ця пошта вже зареєстрована.',
+        phone: 'Цей телефон уже використовується.',
+        device_name: 'зайве',
+      }),
+    ).toEqual({
+      email: 'Ця пошта вже зареєстрована.',
+      phone: 'Цей телефон уже використовується.',
+    })
+  })
+
+  it('без помилок полів — порожньо', () => {
+    expect(profileErrorsFrom({})).toEqual({})
+  })
+})
+
+describe('passwordErrorsFrom', () => {
+  it('кладе помилки сервера під поля форми пароля', () => {
+    expect(
+      passwordErrorsFrom({
+        current_password: 'Невірний пароль.',
+        password: 'Новий пароль має відрізнятися від поточного.',
+      }),
+    ).toEqual({
+      current: 'Невірний пароль.',
+      password: 'Новий пароль має відрізнятися від поточного.',
+    })
   })
 })
 

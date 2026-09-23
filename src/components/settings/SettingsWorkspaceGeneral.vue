@@ -39,7 +39,7 @@ const type = computed(() =>
 )
 
 const saving = computed(() => settings.pending === 'workspace')
-const dirty = computed(() => settings.canManage && !sameWorkspace(form, settings.workspace))
+const dirty = computed(() => !sameWorkspace(form, settings.workspace))
 const nameLength = computed(() => form.name.trim().length)
 
 const created = computed(() => formatLongDate(current.value?.created_at))
@@ -66,10 +66,6 @@ function reset(): void {
 }
 
 async function submit(): Promise<void> {
-  if (!settings.canManage) {
-    return
-  }
-
   errors.value = validateWorkspaceForm(form)
 
   if (hasErrors(errors.value)) {
@@ -79,7 +75,11 @@ async function submit(): Promise<void> {
   const result = await settings.saveWorkspace({ ...form })
 
   if (!result.ok) {
-    serverError.value = result.message
+    if (result.fields.name !== undefined) {
+      errors.value = { name: result.fields.name }
+    } else {
+      serverError.value = result.message
+    }
 
     return
   }
@@ -120,19 +120,11 @@ onBeforeUnmount(() => {
     form
     @submit="submit"
   >
-    <template v-if="!settings.canManage" #aside>
-      <span class="badge">Лише перегляд</span>
-    </template>
-
     <SettingsRow
       label="Назва простору"
-      :hint="
-        settings.canManage
-          ? 'Показується в меню, на сторінках для замовників і в експорті.'
-          : 'Змінити назву може лише власник простору.'
-      "
+      hint="Показується в меню, на сторінках для замовників і в експорті."
     >
-      <div v-if="settings.canManage" class="name">
+      <div class="name">
         <TextField
           v-model="form.name"
           label="Назва"
@@ -148,8 +140,6 @@ onBeforeUnmount(() => {
           {{ nameLength }}/{{ NAME_MAX }}
         </span>
       </div>
-
-      <p v-else class="value">{{ settings.workspace.name }}</p>
     </SettingsRow>
 
     <SettingsRow label="Тип акаунта" hint="Визначається під час створення простору.">
@@ -172,11 +162,8 @@ onBeforeUnmount(() => {
         <div class="facts__row">
           <dt>Власник</dt>
           <dd>
-            <template v-if="settings.canManage">
-              {{ fullNameOf(settings.profile) || settings.profile.email }}
-              <span class="facts__muted">(ви)</span>
-            </template>
-            <template v-else>Інший користувач</template>
+            {{ fullNameOf(settings.profile) || settings.profile.email }}
+            <span class="facts__muted">(ви)</span>
           </dd>
         </div>
 
@@ -197,7 +184,7 @@ onBeforeUnmount(() => {
       </dl>
     </SettingsRow>
 
-    <template v-if="settings.canManage" #footer>
+    <template #footer>
       <SettingsFooter
         :dirty="dirty"
         :saving="saving"
@@ -239,11 +226,6 @@ onBeforeUnmount(() => {
 
 .name__count--over {
   color: var(--danger);
-}
-
-.value {
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .type {

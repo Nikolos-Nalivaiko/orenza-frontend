@@ -10,6 +10,7 @@ import {
   formatLongDate,
   fullNameOf,
   initialsOf,
+  profileErrorsFrom,
   sameProfile,
   sectionAnchor,
   validateProfile,
@@ -68,7 +69,8 @@ async function submit(): Promise<void> {
   const result = await settings.saveProfile({ ...form })
 
   if (!result.ok) {
-    serverError.value = result.message
+    errors.value = profileErrorsFrom(result.fields)
+    serverError.value = hasErrors(errors.value) ? null : result.message
 
     return
   }

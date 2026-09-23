@@ -7,6 +7,7 @@ import {
 } from 'vue-router'
 import type { WorkspaceFeatures } from '@/lib/workspaces'
 import { NAV_FOOTER, NAV } from '@/lib/navigation'
+import { canManageWorkspace } from '@/lib/settings'
 import { useAuthStore } from '@/stores/auth'
 import { useProgressStore } from '@/stores/progress'
 import { useWorkspacesStore } from '@/stores/workspaces'
@@ -174,6 +175,7 @@ const router = createRouter({
             title: 'Налаштування простору',
             subtitle: 'Назва, тип, експорт даних і видалення простору',
             section: 'settings',
+            ownerOnly: true,
           },
         },
         ...sections,
@@ -208,6 +210,10 @@ router.beforeEach(async (to) => {
     return { name: 'workspaces' }
   }
 
+  if (to.meta.ownerOnly === true && !canManageWorkspace(workspace, auth.user?.id ?? null)) {
+    return { name: 'settings', params: { workspace: workspace.slug } }
+  }
+
   const requires = to.meta.requires
 
   if (requires !== undefined && !workspaces.features[requires]) {
@@ -228,6 +234,7 @@ router.afterEach((to) => {
 declare module 'vue-router' {
   interface RouteMeta {
     requires?: keyof WorkspaceFeatures
+    ownerOnly?: boolean
   }
 }
 

@@ -5,7 +5,9 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import router from './router'
+import { onUnauthorized } from './lib/http'
 import { useAuthStore } from './stores/auth'
+import { useWorkspacesStore } from './stores/workspaces'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -14,6 +16,16 @@ app.use(pinia)
 app.use(router)
 
 const auth = useAuthStore(pinia)
+const workspaces = useWorkspacesStore(pinia)
+
+onUnauthorized(() => {
+  workspaces.clear()
+  auth.clear()
+
+  if (router.currentRoute.value.meta.requiresAuth === true) {
+    void router.replace({ name: 'login' })
+  }
+})
 
 void auth.restore().then(() => {
   if (!auth.isAuthenticated && router.currentRoute.value.meta.requiresAuth === true) {

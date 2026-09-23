@@ -249,6 +249,7 @@ export const useAuthStore = defineStore('auth', () => {
     isPending,
     reset,
     setUser,
+    clear,
     register,
     login,
     logout,

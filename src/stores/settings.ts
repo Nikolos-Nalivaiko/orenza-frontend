@@ -1,14 +1,18 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { useAuthStore } from './auth'
-import { useEmployeesStore } from './employees'
-import { useObjectsStore } from './objects'
+import { useAuthStore, type AuthUser } from './auth'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
+import { api, ApiError, download } from '@/lib/http'
 import { todayIso } from '@/lib/objects'
+import type { Workspace } from '@/lib/workspaces'
 import {
+  buildPasswordPayload,
+  buildProfilePayload,
+  buildWorkspacePayload,
   canManageWorkspace,
   exportFileName,
+  type ExportSummary,
   profileFormFrom,
   workspaceFormFrom,
   type PasswordForm,
@@ -28,14 +32,7 @@ export type SettingsTask =
 export interface SettingsResult {
   ok: boolean
   message: string | null
-}
-
-const PREVIEW_DELAY = 750
-
-const PREVIEW_BLOCKED = 'Запрацює після підключення бекенду — зараз це попередній перегляд.'
-
-function pause(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  fields: Record<string, string>
 }
 
 function saveFile(blob: Blob, name: string): void {
@@ -54,32 +51,25 @@ function saveFile(blob: Blob, name: string): void {
 export const useSettingsStore = defineStore('settings', () => {
   const auth = useAuthStore()
   const workspaces = useWorkspacesStore()
-  const objects = useObjectsStore()
-  const employees = useEmployeesStore()
   const progress = useProgressStore()
 
   const pending = ref<SettingsTask | null>(null)
   const profile = ref<ProfileForm>(profileFormFrom(auth.user))
-  const workspaceForms = ref<Record<number, WorkspaceForm>>({})
   const exportedAt = ref<Record<number, Date>>({})
+  const summaries = ref<Record<number, ExportSummary>>({})
+  const summaryLoading = ref(false)
+  const summaryError = ref<string | null>(null)
 
   watch(
     () => auth.user?.id,
     () => {
       profile.value = profileFormFrom(auth.user)
-      workspaceForms.value = {}
       exportedAt.value = {}
+      summaries.value = {}
     },
   )
 
-  const workspace = computed<WorkspaceForm>(() => {
-    const id = workspaces.current?.id
-
-    return (
-      (id === undefined ? undefined : workspaceForms.value[id]) ??
-      workspaceFormFrom(workspaces.current)
-    )
-  })
+  const workspace = computed<WorkspaceForm>(() => workspaceFormFrom(workspaces.current))
 
   const canManage = computed(() => canManageWorkspace(workspaces.current, auth.user?.id ?? null))
 
@@ -93,17 +83,58 @@ export const useSettingsStore = defineStore('settings', () => {
     return id === undefined ? null : (exportedAt.value[id] ?? null)
   })
 
+  const summary = computed(() => {
+    const id = workspaces.current?.id
+
+    return id === undefined ? null : (summaries.value[id] ?? null)
+  })
+
+  async function loadSummary(): Promise<void> {
+    const current = workspaces.current
+
+    if (current === null) {
+      return
+    }
+
+    summaryLoading.value = true
+    summaryError.value = null
+
+    try {
+      const data = await api.get<ExportSummary>(`/workspaces/${current.slug}/export/summary`)
+
+      summaries.value = { ...summaries.value, [current.id]: data }
+    } catch (cause) {
+      summaryError.value =
+        cause instanceof ApiError ? cause.message : 'Не вдалося порахувати обсяг даних.'
+    } finally {
+      summaryLoading.value = false
+    }
+  }
+
   async function run(task: SettingsTask, work: () => Promise<void>): Promise<SettingsResult> {
     pending.value = task
 
     try {
       await progress.track(work())
 
-      return { ok: true, message: null }
+      return { ok: true, message: null, fields: {} }
     } catch (cause) {
+      const fields: Record<string, string> = {}
+
+      if (cause instanceof ApiError && cause.isValidation) {
+        for (const field of Object.keys(cause.errors)) {
+          const message = cause.fieldError(field)
+
+          if (message !== undefined) {
+            fields[field] = message
+          }
+        }
+      }
+
       return {
         ok: false,
         message: cause instanceof Error ? cause.message : 'Не вдалося виконати дію.',
+        fields,
       }
     } finally {
       pending.value = null
@@ -112,75 +143,79 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function saveProfile(form: ProfileForm): Promise<SettingsResult> {
     return run('profile', async () => {
-      await pause(PREVIEW_DELAY)
-      profile.value = { ...form }
+      const user = await api.patch<AuthUser>('/profile', buildProfilePayload(form))
+
+      auth.setUser(user)
+      profile.value = profileFormFrom(user)
     })
   }
 
   function changePassword(form: PasswordForm): Promise<SettingsResult> {
     return run('password', async () => {
-      await pause(PREVIEW_DELAY)
-
-      if (form.current === form.password) {
-        throw new Error('Новий пароль збігається з поточним.')
-      }
+      await api.put('/profile/password', buildPasswordPayload(form))
     })
   }
 
   function signOutOthers(): Promise<SettingsResult> {
-    return run('sessions', () => pause(PREVIEW_DELAY))
+    return run('sessions', async () => {
+      await api.delete('/profile/sessions')
+    })
   }
 
-  function deleteAccount(): Promise<SettingsResult> {
+  function deleteAccount(password: string): Promise<SettingsResult> {
     return run('account-delete', async () => {
-      await pause(PREVIEW_DELAY)
-      throw new Error(PREVIEW_BLOCKED)
+      await api.delete('/profile', { body: { password } })
+
+      workspaces.clear()
+      auth.clear()
     })
   }
 
   function saveWorkspace(form: WorkspaceForm): Promise<SettingsResult> {
     return run('workspace', async () => {
-      await pause(PREVIEW_DELAY)
-
-      const id = workspaces.current?.id
-
-      if (id !== undefined) {
-        workspaceForms.value = { ...workspaceForms.value, [id]: { name: form.name.trim() } }
-      }
-    })
-  }
-
-  function exportData(): Promise<SettingsResult> {
-    return run('export', async () => {
-      await pause(PREVIEW_DELAY * 1.6)
-
       const current = workspaces.current
 
       if (current === null) {
         throw new Error('Простір не обрано.')
       }
 
-      const snapshot = {
-        exported_at: new Date().toISOString(),
-        workspace: current,
-        objects: objects.current,
-        clients: objects.clients,
-        employees: employees.items,
+      workspaces.replace(
+        await api.patch<Workspace>(`/workspaces/${current.slug}`, buildWorkspacePayload(form)),
+      )
+    })
+  }
+
+  function exportData(): Promise<SettingsResult> {
+    return run('export', async () => {
+      const current = workspaces.current
+
+      if (current === null) {
+        throw new Error('Простір не обрано.')
       }
 
-      saveFile(
-        new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' }),
-        exportFileName(current.slug, todayIso(), 'json'),
-      )
+      const archive = await download(`/workspaces/${current.slug}/export`)
+
+      saveFile(archive, exportFileName(current.slug, todayIso()))
 
       exportedAt.value = { ...exportedAt.value, [current.id]: new Date() }
     })
   }
 
-  function deleteWorkspace(): Promise<SettingsResult> {
+  function deleteWorkspace(name: string): Promise<SettingsResult> {
     return run('workspace-delete', async () => {
-      await pause(PREVIEW_DELAY)
-      throw new Error(PREVIEW_BLOCKED)
+      const current = workspaces.current
+
+      if (current === null) {
+        throw new Error('Простір не обрано.')
+      }
+
+      await api.delete(`/workspaces/${current.slug}`, { body: { name: name.trim() } })
+
+      workspaces.remove(current.id)
+
+      if (auth.user !== null && auth.user.current_workspace_id === current.id) {
+        auth.setUser({ ...auth.user, current_workspace_id: null })
+      }
     })
   }
 
@@ -191,6 +226,10 @@ export const useSettingsStore = defineStore('settings', () => {
     canManage,
     ownedWorkspaces,
     lastExport,
+    summary,
+    summaryLoading,
+    summaryError,
+    loadSummary,
     saveProfile,
     changePassword,
     signOutOthers,

@@ -8,6 +8,7 @@ import PasswordMeter from '@/components/ui/PasswordMeter.vue'
 import {
   emptyPasswordForm,
   isPasswordFormTouched,
+  passwordErrorsFrom,
   sectionAnchor,
   validatePasswordForm,
   type PasswordForm,
@@ -59,7 +60,8 @@ async function submit(): Promise<void> {
   const result = await settings.changePassword({ ...form })
 
   if (!result.ok) {
-    serverError.value = result.message
+    errors.value = passwordErrorsFrom(result.fields)
+    serverError.value = hasErrors(errors.value) ? null : result.message
 
     return
   }

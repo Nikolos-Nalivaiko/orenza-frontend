@@ -169,6 +169,21 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     return currentId.value === target.id ? target : null
   }
 
+  function replace(workspace: Workspace): void {
+    items.value = items.value.map((item) => (item.id === workspace.id ? workspace : item))
+    persist()
+  }
+
+  function remove(id: number): void {
+    items.value = items.value.filter((item) => item.id !== id)
+
+    if (currentId.value === id) {
+      currentId.value = null
+    }
+
+    persist()
+  }
+
   function clear(): void {
     items.value = []
     currentId.value = null
@@ -193,6 +208,8 @@ export const useWorkspacesStore = defineStore('workspaces', () => {
     create,
     select,
     enter,
+    replace,
+    remove,
     clear,
   }
 })

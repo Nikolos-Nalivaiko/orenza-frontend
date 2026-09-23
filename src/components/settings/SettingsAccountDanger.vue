@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import AccountDeleteDialog from '@/components/settings/AccountDeleteDialog.vue'
 import SettingsCard from '@/components/settings/SettingsCard.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
@@ -7,6 +8,7 @@ import { formatUnits, sectionAnchor } from '@/lib/settings'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
+const router = useRouter()
 
 const open = ref(false)
 const error = ref<string | null>(null)
@@ -21,13 +23,15 @@ function close(): void {
   }
 }
 
-async function confirm(): Promise<void> {
+async function confirm(password: string): Promise<void> {
   error.value = null
 
-  const result = await settings.deleteAccount()
+  const result = await settings.deleteAccount(password)
 
-  if (!result.ok) {
-    error.value = result.message
+  if (result.ok) {
+    await router.replace({ name: 'login' })
+  } else {
+    error.value = result.fields.password ?? result.message
   }
 }
 </script>

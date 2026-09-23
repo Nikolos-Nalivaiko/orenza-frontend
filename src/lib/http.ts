@@ -1,9 +1,20 @@
 export const API_URL = (import.meta.env.VITE_API_URL ?? '/api/v1').replace(/\/+$/, '')
 
 let authToken: string | null = null
+let unauthorizedHandler: (() => void) | null = null
 
 export function setAuthToken(token: string | null): void {
   authToken = token
+}
+
+export function onUnauthorized(handler: (() => void) | null): void {
+  unauthorizedHandler = handler
+}
+
+function notifyUnauthorized(status: number, token: string | null): void {
+  if (status === 401 && token !== null && token === authToken) {
+    unauthorizedHandler?.()
+  }
 }
 
 export interface ApiEnvelope<T> {
@@ -75,8 +86,10 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     headers['Content-Type'] = 'application/json'
   }
 
-  if (authToken !== null) {
-    headers.Authorization = `Bearer ${authToken}`
+  const token = authToken
+
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`
   }
 
   let response: Response
@@ -100,6 +113,8 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const payload = await parse(response)
 
   if (!response.ok) {
+    notifyUnauthorized(response.status, token)
+
     throw errorFrom(response.status, payload)
   }
 
@@ -115,6 +130,35 @@ function errorFrom(status: number, payload: unknown): ApiError {
     error.error_code ?? 'error',
     error.errors ?? {},
   )
+}
+
+export async function download(path: string, signal?: AbortSignal): Promise<Blob> {
+  const token = authToken
+  const headers: Record<string, string> = { Accept: 'application/octet-stream, application/json' }
+
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  let response: Response
+
+  try {
+    response = await fetch(`${API_URL}${path}`, { headers, signal, credentials: 'omit' })
+  } catch (cause) {
+    if (typeof cause === 'object' && cause !== null && (cause as Error).name === 'AbortError') {
+      throw cause
+    }
+
+    throw new ApiError('Немає звʼязку із сервером.', 0, 'network')
+  }
+
+  if (!response.ok) {
+    notifyUnauthorized(response.status, token)
+
+    throw errorFrom(response.status, await parse(response))
+  }
+
+  return response.blob()
 }
 
 export interface UploadOptions {
@@ -134,11 +178,13 @@ export function upload<T>(path: string, form: FormData, options: UploadOptions =
 
     const xhr = new XMLHttpRequest()
 
+    const token = authToken
+
     xhr.open('POST', `${API_URL}${path}`)
     xhr.setRequestHeader('Accept', 'application/json')
 
-    if (authToken !== null) {
-      xhr.setRequestHeader('Authorization', `Bearer ${authToken}`)
+    if (token !== null) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     }
 
     xhr.upload.addEventListener('progress', (event) => {
@@ -160,6 +206,7 @@ export function upload<T>(path: string, form: FormData, options: UploadOptions =
         onProgress?.(1)
         resolve((payload as ApiEnvelope<T> | null)?.data as T)
       } else {
+        notifyUnauthorized(xhr.status, token)
         reject(errorFrom(xhr.status, payload))
       }
     })
@@ -197,6 +244,6 @@ export const api = {
     options: Omit<RequestOptions, 'method'> = {},
   ): Promise<T> => request<T>(path, { ...options, method: 'PATCH', body }),
 
-  delete: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<T> =>
+  delete: <T>(path: string, options: Omit<RequestOptions, 'method'> = {}): Promise<T> =>
     request<T>(path, { ...options, method: 'DELETE' }),
 }

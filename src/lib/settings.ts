@@ -1,4 +1,3 @@
-import type { ConstructionObject, Client } from '@/lib/objects'
 import { isBlankPhone, isCompletePhone, phoneDigits } from '@/lib/phone'
 import {
   isEmail,
@@ -159,6 +158,34 @@ export function buildProfilePayload(form: ProfileForm): ProfilePayload {
   }
 }
 
+function formErrorsFrom<Form>(
+  fields: Record<string, string>,
+  map: Record<string, keyof Form>,
+): Errors<Form> {
+  const errors: Errors<Form> = {}
+
+  for (const [field, key] of Object.entries(map)) {
+    const message = fields[field]
+
+    if (message !== undefined) {
+      errors[key] = message
+    }
+  }
+
+  return errors
+}
+
+const PROFILE_FIELDS: Record<keyof ProfilePayload, keyof ProfileForm> = {
+  first_name: 'firstName',
+  last_name: 'lastName',
+  email: 'email',
+  phone: 'phone',
+}
+
+export function profileErrorsFrom(fields: Record<string, string>): Errors<ProfileForm> {
+  return formErrorsFrom<ProfileForm>(fields, PROFILE_FIELDS)
+}
+
 export function initialsOf(form: ProfileForm): string {
   const first = form.firstName.trim()[0] ?? ''
   const last = form.lastName.trim()[0] ?? ''
@@ -216,6 +243,16 @@ export function buildPasswordPayload(form: PasswordForm): PasswordPayload {
     password: form.password,
     password_confirmation: form.confirmation,
   }
+}
+
+const PASSWORD_FIELDS: Record<keyof PasswordPayload, keyof PasswordForm> = {
+  current_password: 'current',
+  password: 'password',
+  password_confirmation: 'confirmation',
+}
+
+export function passwordErrorsFrom(fields: Record<string, string>): Errors<PasswordForm> {
+  return formErrorsFrom<PasswordForm>(fields, PASSWORD_FIELDS)
 }
 
 export interface AccountTypeInfo {
@@ -277,26 +314,10 @@ export interface ExportSummary {
   objects: number
   archived: number
   clients: number
-  employees: number
+  employees: number | null
   materials: number
   services: number
   payments: number
-}
-
-export function exportSummary(
-  objects: ConstructionObject[],
-  clients: Client[],
-  employees: number,
-): ExportSummary {
-  return {
-    objects: objects.length,
-    archived: objects.filter((object) => object.archived_at !== null).length,
-    clients: clients.length,
-    employees,
-    materials: objects.reduce((sum, object) => sum + object.materials.length, 0),
-    services: objects.reduce((sum, object) => sum + object.services.length, 0),
-    payments: objects.reduce((sum, object) => sum + object.payments.length, 0),
-  }
 }
 
 export interface ExportFile {
