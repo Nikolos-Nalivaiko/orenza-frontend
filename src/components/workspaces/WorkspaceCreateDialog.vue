@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
             :placeholder="isCompany ? 'ТОВ «БудКомпанія»' : ownerName"
             :hint="
               isCompany
-                ? 'Її бачитимуть усі учасники простору.'
+                ? 'Показується в меню та в експорті даних.'
                 : 'Порожнє поле — візьмемо ваше імʼя.'
             "
             :error="errors.name ?? nameError"

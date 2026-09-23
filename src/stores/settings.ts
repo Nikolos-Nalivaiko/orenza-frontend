@@ -10,7 +10,6 @@ import {
   buildPasswordPayload,
   buildProfilePayload,
   buildWorkspacePayload,
-  canManageWorkspace,
   exportFileName,
   type ExportSummary,
   profileFormFrom,
@@ -70,12 +69,6 @@ export const useSettingsStore = defineStore('settings', () => {
   )
 
   const workspace = computed<WorkspaceForm>(() => workspaceFormFrom(workspaces.current))
-
-  const canManage = computed(() => canManageWorkspace(workspaces.current, auth.user?.id ?? null))
-
-  const ownedWorkspaces = computed(() =>
-    workspaces.items.filter((item) => item.owner_id === auth.user?.id),
-  )
 
   const lastExport = computed(() => {
     const id = workspaces.current?.id
@@ -223,8 +216,6 @@ export const useSettingsStore = defineStore('settings', () => {
     pending,
     profile,
     workspace,
-    canManage,
-    ownedWorkspaces,
     lastExport,
     summary,
     summaryLoading,

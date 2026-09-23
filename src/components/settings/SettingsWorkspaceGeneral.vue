@@ -8,7 +8,6 @@ import TextField from '@/components/ui/TextField.vue'
 import {
   ACCOUNT_TYPE_INFO,
   formatLongDate,
-  fullNameOf,
   sameWorkspace,
   sectionAnchor,
   validateWorkspaceForm,
@@ -159,14 +158,6 @@ onBeforeUnmount(() => {
 
     <SettingsRow label="Відомості">
       <dl class="facts">
-        <div class="facts__row">
-          <dt>Власник</dt>
-          <dd>
-            {{ fullNameOf(settings.profile) || settings.profile.email }}
-            <span class="facts__muted">(ви)</span>
-          </dd>
-        </div>
-
         <div v-if="created" class="facts__row">
           <dt>Створено</dt>
           <dd>{{ created }}</dd>
@@ -302,10 +293,6 @@ onBeforeUnmount(() => {
   min-width: 0;
   color: var(--ink);
   overflow-wrap: anywhere;
-}
-
-.facts__muted {
-  color: var(--ink-faint);
 }
 
 .facts__slug {

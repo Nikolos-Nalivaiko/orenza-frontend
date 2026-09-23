@@ -4,15 +4,12 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { useDismissable } from '@/composables/useDismissable'
 import { switchTarget } from '@/lib/navigation'
-import { canManageWorkspace } from '@/lib/settings'
 import { monogram, WORKSPACE_TYPE_LABELS } from '@/lib/workspaces'
-import { useAuthStore } from '@/stores/auth'
 import { useWorkspacesStore } from '@/stores/workspaces'
 
 defineProps<{ collapsed: boolean }>()
 
 const workspaces = useWorkspacesStore()
-const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -22,7 +19,6 @@ const open = ref(false)
 useDismissable(root, open)
 
 const current = computed(() => workspaces.current)
-const canManage = computed(() => canManageWorkspace(current.value, auth.user?.id ?? null))
 const typeLabel = computed(() =>
   current.value === null ? '' : WORKSPACE_TYPE_LABELS[current.value.type.value],
 )
@@ -107,13 +103,7 @@ async function toAll(): Promise<void> {
 
         <hr class="hairline" />
 
-        <button
-          v-if="canManage"
-          type="button"
-          class="menu__all"
-          role="menuitem"
-          @click="toSettings"
-        >
+        <button type="button" class="menu__all" role="menuitem" @click="toSettings">
           <AppIcon name="settings" />
           Налаштування простору
         </button>

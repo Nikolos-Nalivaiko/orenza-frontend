@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
   SETTINGS_MENU,
@@ -7,7 +6,6 @@ import {
   type SettingsPage,
   type SettingsSectionId,
 } from '@/lib/settings'
-import { useSettingsStore } from '@/stores/settings'
 
 const props = defineProps<{
   page: SettingsPage
@@ -16,12 +14,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ go: [id: SettingsSectionId] }>()
-
-const settings = useSettingsStore()
-
-const items = computed(() =>
-  SETTINGS_MENU.filter((item) => item.page !== 'workspace' || settings.canManage),
-)
 
 function isOn(item: SettingsMenuItem): boolean {
   return item.page === props.page && item.id === props.active
@@ -38,7 +30,7 @@ function onClick(event: MouseEvent, item: SettingsMenuItem): void {
 <template>
   <nav class="snav" aria-label="Розділи налаштувань">
     <RouterLink
-      v-for="item in items"
+      v-for="item in SETTINGS_MENU"
       :key="item.id"
       class="snav__item"
       :class="{ 'snav__item--on': isOn(item) }"

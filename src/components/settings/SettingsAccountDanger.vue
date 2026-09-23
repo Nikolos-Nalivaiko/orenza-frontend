@@ -6,14 +6,16 @@ import SettingsCard from '@/components/settings/SettingsCard.vue'
 import SettingsRow from '@/components/settings/SettingsRow.vue'
 import { formatUnits, sectionAnchor } from '@/lib/settings'
 import { useSettingsStore } from '@/stores/settings'
+import { useWorkspacesStore } from '@/stores/workspaces'
 
 const settings = useSettingsStore()
+const workspaces = useWorkspacesStore()
 const router = useRouter()
 
 const open = ref(false)
 const error = ref<string | null>(null)
 
-const owned = computed(() => settings.ownedWorkspaces)
+const owned = computed(() => workspaces.items)
 const deleting = computed(() => settings.pending === 'account-delete')
 
 function close(): void {
@@ -46,7 +48,7 @@ async function confirm(password: string): Promise<void> {
     <SettingsRow label="Що буде видалено">
       <ul class="facts">
         <li>
-          <span class="facts__key">Простори, де ви власник</span>
+          <span class="facts__key">Ваші простори</span>
           <span class="facts__value">
             {{
               owned.length === 0

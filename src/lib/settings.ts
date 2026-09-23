@@ -302,10 +302,6 @@ export function buildWorkspacePayload(form: WorkspaceForm): WorkspaceForm {
   return { name: form.name.trim() }
 }
 
-export function canManageWorkspace(workspace: Workspace | null, userId: number | null): boolean {
-  return workspace !== null && userId !== null && workspace.owner_id === userId
-}
-
 export function isWorkspaceDeleteConfirmed(typed: string, name: string): boolean {
   return name.trim() !== '' && typed.trim() === name.trim()
 }

@@ -212,7 +212,6 @@ async function signOut(): Promise<void> {
               :style="{ '--i': index }"
               :workspace="workspace"
               :current="workspace.id === workspaces.currentId"
-              :owned="workspace.owner_id === auth.user?.id"
               @open="open(workspace.id)"
             />
 

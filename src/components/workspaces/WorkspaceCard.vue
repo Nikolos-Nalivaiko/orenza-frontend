@@ -5,7 +5,6 @@ import { formatCreatedAt, monogram, WORKSPACE_TYPE_LABELS, type Workspace } from
 const props = defineProps<{
   workspace: Workspace
   current: boolean
-  owned: boolean
 }>()
 
 defineEmits<{ open: [] }>()
@@ -33,7 +32,6 @@ const created = computed(() => formatCreatedAt(props.workspace.created_at))
     <span class="card__name">{{ workspace.name }}</span>
 
     <span class="card__foot">
-      <span v-if="owned" class="card__owner">Власник</span>
       <span v-if="created" class="card__date">створено {{ created }}</span>
 
       <span class="card__go" aria-hidden="true">
@@ -149,17 +147,6 @@ const created = computed(() => formatCreatedAt(props.workspace.created_at))
   border-top: 1px solid var(--line);
   font-size: 12px;
   color: var(--ink-faint);
-}
-
-.card__owner {
-  padding: 3px 8px;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
 }
 
 .card__go {

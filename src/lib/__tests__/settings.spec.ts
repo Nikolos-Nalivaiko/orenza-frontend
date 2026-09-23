@@ -4,7 +4,6 @@ import {
   buildPasswordPayload,
   buildProfilePayload,
   buildWorkspacePayload,
-  canManageWorkspace,
   emailChanged,
   emptyPasswordForm,
   exportFileName,
@@ -246,13 +245,6 @@ describe('простір', () => {
   it('пробіли навколо назви не є зміною', () => {
     expect(sameWorkspace({ name: 'БудМайстер' }, { name: ' БудМайстер ' })).toBe(true)
     expect(buildWorkspacePayload({ name: ' БудМайстер ' })).toEqual({ name: 'БудМайстер' })
-  })
-
-  it('керувати простором може лише власник', () => {
-    expect(canManageWorkspace(workspace(), 7)).toBe(true)
-    expect(canManageWorkspace(workspace(), 8)).toBe(false)
-    expect(canManageWorkspace(workspace(), null)).toBe(false)
-    expect(canManageWorkspace(null, 7)).toBe(false)
   })
 
   it('видалення підтверджується точною назвою', () => {

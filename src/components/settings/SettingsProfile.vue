@@ -102,7 +102,7 @@ onBeforeUnmount(() => clearTimeout(savedTimer))
       </div>
     </SettingsRow>
 
-    <SettingsRow label="ПІБ власника" hint="Так вас бачать учасники простору й замовники.">
+    <SettingsRow label="ПІБ власника" hint="Імʼя та прізвище власника акаунта.">
       <div class="pair">
         <TextField
           v-model="form.firstName"
