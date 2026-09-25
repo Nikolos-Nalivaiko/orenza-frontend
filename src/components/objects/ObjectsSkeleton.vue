@@ -11,8 +11,11 @@ const PLACEHOLDERS = [0, 1, 2, 3, 4]
   <div :class="view === 'cards' ? 'grid' : 'rows'" aria-hidden="true">
     <div v-for="index in PLACEHOLDERS" :key="index" :class="view === 'cards' ? 'card' : 'row'">
       <template v-if="view === 'cards'">
-        <span class="sk sk--cover" />
         <div class="card__body">
+          <div class="card__head">
+            <span class="sk sk--icon" />
+            <span class="sk sk--chip" />
+          </div>
           <span class="sk sk--name" />
           <span class="sk sk--line" />
           <span class="sk sk--bar" />
@@ -61,7 +64,6 @@ const PLACEHOLDERS = [0, 1, 2, 3, 4]
 
 .card {
   display: grid;
-  grid-template-rows: auto 1fr;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -88,9 +90,17 @@ const PLACEHOLDERS = [0, 1, 2, 3, 4]
   animation: shimmer 1.6s var(--ease) infinite;
 }
 
-.sk--cover {
-  height: 128px;
-  border-radius: 0;
+.card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.sk--icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
 }
 
 .sk--name {

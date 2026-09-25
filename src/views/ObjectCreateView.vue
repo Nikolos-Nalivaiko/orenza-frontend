@@ -3,7 +3,6 @@ import { computed, nextTick, onMounted, reactive, ref, useTemplateRef, watch } f
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import ClientCreateDialog from '@/components/clients/ClientCreateDialog.vue'
 import ClientPicker from '@/components/objects/ClientPicker.vue'
-import CoverPicker from '@/components/objects/CoverPicker.vue'
 import FinancePanel from '@/components/objects/FinancePanel.vue'
 import MaterialsPanel from '@/components/objects/MaterialsPanel.vue'
 import ServicesPanel from '@/components/objects/ServicesPanel.vue'
@@ -490,14 +489,6 @@ async function toObjects(): Promise<void> {
 
             <div class="part__fields">
               <StatusPicker v-model="form.status" />
-            </div>
-          </div>
-
-          <div class="part">
-            <h3 class="part__title">Обкладинка</h3>
-
-            <div class="part__fields">
-              <CoverPicker v-model="form.cover" />
             </div>
           </div>
         </section>

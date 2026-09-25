@@ -103,7 +103,7 @@ export async function prepareImageUpload(
       return { file, width: decoded.width, height: decoded.height }
     }
 
-    const name = file.name.replace(/\.[^.]+$/, '') || 'cover'
+    const name = file.name.replace(/\.[^.]+$/, '') || 'photo'
 
     return {
       file: new File([blob], `${name}.jpg`, { type: 'image/jpeg' }),

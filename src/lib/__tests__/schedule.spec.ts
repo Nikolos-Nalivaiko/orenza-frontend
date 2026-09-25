@@ -52,7 +52,6 @@ function object(overrides: Partial<ConstructionObject> = {}): ConstructionObject
     finished_at: '2026-09-20',
     actual_started_at: null,
     actual_finished_at: null,
-    cover: null,
     materials: [],
     services: [],
     discount_percent: null,

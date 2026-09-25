@@ -8,7 +8,6 @@ function resource(overrides: Partial<TrackResource> = {}): TrackResource {
     address: 'вул. Стеценка, 12 · Київ',
     description: 'Монолітний каркас',
     status: { value: 'in_progress', label: 'В роботі' },
-    cover: null,
     readiness: 0.75,
     works: { done: 1, total: 2 },
     started_at: '2026-06-01',
@@ -64,7 +63,6 @@ describe('normalizeTrack', () => {
   it('переводить відповідь API у поля сторінки', () => {
     const view = normalizeTrack(resource())
 
-    expect(view.cover).toBeNull()
     expect(view.photos).toEqual([])
     expect(view.plannedStart).toBe('2026-06-01')
     expect(view.plannedFinish).toBe('2026-10-14')
@@ -88,20 +86,6 @@ describe('normalizeTrack', () => {
     expect(view.payments).toEqual([
       { id: 5, date: '2026-08-01', amount: 100_000, received: true, note: 'Аванс' },
     ])
-  })
-
-  it('передає обкладинку з фокусом як є', () => {
-    const cover = {
-      thumb: 'https://cdn.test/t.webp',
-      card: 'https://cdn.test/c.webp',
-      hero: 'https://cdn.test/h.webp',
-      width: 1600,
-      height: 900,
-      color: '#7a8b6c',
-      focus: { x: 0.2, y: 0.7 },
-    }
-
-    expect(normalizeTrack(resource({ cover })).cover).toEqual(cover)
   })
 
   it('передає фото з майданчика для переглядача', () => {

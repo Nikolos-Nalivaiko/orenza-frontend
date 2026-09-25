@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import CoverImage from '@/components/cover/CoverImage.vue'
+import ObjectIcon from '@/components/objects/ObjectIcon.vue'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import { formatAmount } from '@/lib/amount'
 import { formatDay } from '@/lib/objects'
@@ -27,9 +27,7 @@ function percent(value: number): string {
     <ul class="orows">
       <li v-for="{ object, summary } in rows" :key="object.id" class="orow">
         <div class="cell cell--name">
-          <span class="orow__thumb">
-            <CoverImage :cover="object.cover" :name="object.name" variant="thumb" sizes="44px" />
-          </span>
+          <ObjectIcon :status="object.status.value" :size="40" />
 
           <span class="orow__ident">
             <!-- Уся ідентифікація обʼєкта — одне посилання: клікати треба в назву. -->
@@ -153,15 +151,6 @@ function percent(value: number): string {
   grid-template-columns: 44px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-}
-
-.orow__thumb {
-  display: block;
-  overflow: hidden;
-  width: 44px;
-  height: 44px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
 }
 
 .orow__ident {

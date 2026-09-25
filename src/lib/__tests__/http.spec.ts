@@ -227,16 +227,16 @@ describe('upload', () => {
     const progress: number[] = []
     const form = new FormData()
 
-    form.append('cover', new File(['x'], 'cover.jpg', { type: 'image/jpeg' }))
+    form.append('photo', new File(['x'], 'photo.jpg', { type: 'image/jpeg' }))
 
-    const pending = upload<{ id: number }>('/objects/1/cover', form, {
+    const pending = upload<{ id: number }>('/objects/1/photos', form, {
       onProgress: (fraction) => progress.push(fraction),
     })
 
     const xhr = FakeXhr.last as FakeXhr
 
     expect(xhr.method).toBe('POST')
-    expect(xhr.url).toBe(`${API_URL}/objects/1/cover`)
+    expect(xhr.url).toBe(`${API_URL}/objects/1/photos`)
     expect(xhr.headers.Authorization).toBe('Bearer secret')
     expect(xhr.body).toBe(form)
 
@@ -250,25 +250,25 @@ describe('upload', () => {
   it('перетворює помилку валідації на ApiError', async () => {
     vi.stubGlobal('XMLHttpRequest', FakeXhr)
 
-    const pending = upload('/objects/1/cover', new FormData())
+    const pending = upload('/objects/1/photos', new FormData())
 
     FakeXhr.last?.respond(422, {
       message: 'Перевірте заповнені поля.',
       error_code: 'validation_failed',
-      errors: { cover: ['Файл завеликий.'] },
+      errors: { photo: ['Файл завеликий.'] },
     })
 
     const error = await pending.catch((cause: unknown) => cause)
 
     expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).fieldError('cover')).toBe('Файл завеликий.')
+    expect((error as ApiError).fieldError('photo')).toBe('Файл завеликий.')
   })
 
   it('скасування обриває запит', async () => {
     vi.stubGlobal('XMLHttpRequest', FakeXhr)
 
     const controller = new AbortController()
-    const pending = upload('/objects/1/cover', new FormData(), { signal: controller.signal })
+    const pending = upload('/objects/1/photos', new FormData(), { signal: controller.signal })
 
     controller.abort()
 

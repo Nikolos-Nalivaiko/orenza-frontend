@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import CoverImage from '@/components/cover/CoverImage.vue'
+import ObjectIcon from '@/components/objects/ObjectIcon.vue'
 import StatusBadge from '@/components/objects/StatusBadge.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
@@ -16,23 +16,13 @@ function percent(value: number): string {
 
 <template>
   <li class="ocard">
-    <!-- Обкладинка або її замінник: картки гортають очима, і якір потрібен завжди. -->
-    <div class="ocard__cover">
-      <CoverImage
-        :cover="row.object.cover"
-        :name="row.object.name"
-        variant="card"
-        sizes="(max-width: 640px) 100vw, 360px"
-      />
-
-      <StatusBadge
-        class="ocard__status"
-        :status="row.object.status.value"
-        :label="row.object.status.label"
-      />
-    </div>
-
     <div class="ocard__body">
+      <div class="ocard__head">
+        <ObjectIcon :status="row.object.status.value" :size="44" />
+
+        <StatusBadge :status="row.object.status.value" :label="row.object.status.label" />
+      </div>
+
       <h3 class="ocard__name">
         <RouterLink class="ocard__link" :to="{ name: 'object', params: { id: row.object.id } }">
           {{ row.object.name }}
@@ -92,7 +82,6 @@ function percent(value: number): string {
 .ocard {
   position: relative;
   display: grid;
-  grid-template-rows: auto 1fr;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -109,25 +98,19 @@ function percent(value: number): string {
   transform: translateY(-2px);
 }
 
-.ocard__cover {
-  position: relative;
-  height: 128px;
-  background: var(--paper-sunk);
-}
-
-.ocard__status {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: var(--paper-raised);
-  box-shadow: var(--shadow-sm);
+.ocard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
 }
 
 .ocard__body {
   display: grid;
   align-content: start;
   gap: 8px;
-  padding: 14px 16px 16px;
+  padding: 16px 16px 16px;
 }
 
 .ocard__link {

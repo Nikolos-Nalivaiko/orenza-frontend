@@ -1,4 +1,3 @@
-import type { ObjectCover } from '@/lib/cover'
 import type { DueState } from '@/lib/finance'
 import { api } from '@/lib/http'
 import type { MaterialStatus } from '@/lib/materials'
@@ -53,7 +52,6 @@ export interface TrackResource {
   address: string
   description: string | null
   status: Labeled<ObjectStatus>
-  cover: ObjectCover | null
   readiness: number | null
   works: { done: number; total: number }
   started_at: string | null
@@ -114,7 +112,6 @@ export interface TrackObject {
   address: string
   description: string | null
   status: Labeled<ObjectStatus>
-  cover: ObjectCover | null
   readiness: number | null
   works: { done: number; total: number }
   plannedStart: string | null
@@ -135,7 +132,6 @@ export function normalizeTrack(resource: TrackResource): TrackObject {
     address: resource.address,
     description: resource.description,
     status: resource.status,
-    cover: resource.cover,
     readiness: resource.readiness,
     works: resource.works,
     plannedStart: resource.started_at,

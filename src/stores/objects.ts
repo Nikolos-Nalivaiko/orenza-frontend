@@ -33,9 +33,8 @@ import {
   type ObjectStatus,
 } from '@/lib/objects'
 import { buildClientPayload, type ClientForm } from '@/lib/clients'
-import { CENTER_FOCUS, clampFocus, type CoverFocus } from '@/lib/cover'
 import { objectDraftKey } from '@/lib/drafts'
-import { api, ApiError, upload } from '@/lib/http'
+import { api, ApiError } from '@/lib/http'
 
 const VIEW_KEY = 'orenza.objects.view'
 
@@ -788,128 +787,6 @@ export const useObjectsStore = defineStore('objects', () => {
     return true
   }
 
-  /* ── Обкладинка ───────────────────────────────────────────────── */
-
-  const coverProgress = ref<number | null>(null)
-  const coverError = ref<string | null>(null)
-  const isSavingCover = ref(false)
-
-  function coverPath(id: number): string | null {
-    const path = objectsPath()
-
-    return path === null ? null : `${path}/${id}/cover`
-  }
-
-  function applyCover(core: ObjectCore): void {
-    const object = fromApi(core)
-
-    items.value = items.value.map((item) => (item.id === object.id ? object : item))
-  }
-
-  async function uploadCover(
-    id: number,
-    file: File,
-    focus: CoverFocus = CENTER_FOCUS,
-  ): Promise<boolean> {
-    const path = coverPath(id)
-
-    if (path === null) {
-      return false
-    }
-
-    const { x, y } = clampFocus(focus)
-    const form = new FormData()
-
-    form.append('cover', file)
-    form.append('focus_x', String(x))
-    form.append('focus_y', String(y))
-
-    coverError.value = null
-    coverProgress.value = 0
-    isSavingCover.value = true
-
-    try {
-      const updated = await progress.track(
-        upload<ObjectCore>(path, form, {
-          onProgress: (fraction) => {
-            coverProgress.value = fraction
-          },
-        }),
-      )
-
-      applyCover(updated)
-
-      return true
-    } catch (cause) {
-      coverError.value =
-        cause instanceof ApiError
-          ? (cause.fieldError('cover') ?? cause.message)
-          : 'Не вдалося завантажити обкладинку.'
-
-      return false
-    } finally {
-      coverProgress.value = null
-      isSavingCover.value = false
-    }
-  }
-
-  async function setCoverFocus(id: number, focus: CoverFocus): Promise<boolean> {
-    const path = coverPath(id)
-    const object = find(id)
-
-    if (path === null || object === null || object.cover === null) {
-      return false
-    }
-
-    const next = clampFocus(focus)
-
-    coverError.value = null
-    isSavingCover.value = true
-
-    try {
-      const updated = await progress.track(
-        api.patch<ObjectCore>(path, { focus_x: next.x, focus_y: next.y }),
-      )
-
-      applyCover(updated)
-
-      return true
-    } catch (cause) {
-      coverError.value = clientError(cause, 'Не вдалося зберегти кадрування.')
-
-      return false
-    } finally {
-      isSavingCover.value = false
-    }
-  }
-
-  async function removeCover(id: number): Promise<boolean> {
-    const path = coverPath(id)
-
-    if (path === null) {
-      return false
-    }
-
-    coverError.value = null
-    isSavingCover.value = true
-
-    try {
-      applyCover(await progress.track(api.delete<ObjectCore>(path)))
-
-      return true
-    } catch (cause) {
-      coverError.value = clientError(cause, 'Не вдалося прибрати обкладинку.')
-
-      return false
-    } finally {
-      isSavingCover.value = false
-    }
-  }
-
-  function resetCoverError(): void {
-    coverError.value = null
-  }
-
   function reset(): void {
     error.value = null
   }
@@ -1052,14 +929,6 @@ export const useObjectsStore = defineStore('objects', () => {
 
       clearDraft()
 
-      if (form.cover !== null) {
-        const uploaded = await uploadCover(created.id, form.cover.file, form.cover.focus)
-
-        if (!uploaded) {
-          error.value = `Обʼєкт створено, але обкладинку не завантажено: ${coverError.value ?? 'спробуйте ще раз з картки обʼєкта.'}`
-        }
-      }
-
       return find(created.id)
     } catch (cause) {
       error.value = clientError(cause, 'Не вдалося створити обʼєкт.')
@@ -1113,7 +982,7 @@ export const useObjectsStore = defineStore('objects', () => {
     const key = draftKey()
 
     if (key !== null) {
-      write(key, { ...form, cover: null })
+      write(key, form)
     }
   }
 
@@ -1167,13 +1036,6 @@ export const useObjectsStore = defineStore('objects', () => {
     setPaymentStatus,
     removePayment,
     remove,
-    coverProgress,
-    coverError,
-    isSavingCover,
-    uploadCover,
-    setCoverFocus,
-    removeCover,
-    resetCoverError,
     findClient,
     fetchClients,
     createClient,

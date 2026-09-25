@@ -104,7 +104,7 @@ async function download(): Promise<void> {
 
     <SettingsRow
       label="Склад архіву"
-      hint="CSV із розділювачем «;» відкривається в Excel і Google Таблицях. Фото й обкладинки не входять."
+      hint="CSV із розділювачем «;» відкривається в Excel і Google Таблицях. Фото не входять."
     >
       <div class="archive">
         <p class="archive__name">{{ fileName }}</p>

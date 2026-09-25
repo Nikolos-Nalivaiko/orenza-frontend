@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import CoverImage from '@/components/cover/CoverImage.vue'
+import ObjectIcon from '@/components/objects/ObjectIcon.vue'
 import PhotoViewer from '@/components/objects/PhotoViewer.vue'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import { formatAmount } from '@/lib/amount'
@@ -106,36 +106,36 @@ onBeforeUnmount(() => controller?.abort())
 
     <template v-else>
       <header class="hero">
-        <!-- Фото першим і крупно: це те, заради чого сюди й заходять. -->
-        <div class="shot">
-          <CoverImage
-            :cover="view.cover"
-            :name="view.name"
-            variant="hero"
-            sizes="(max-width: 1020px) 100vw, 980px"
-            eager
-          />
+        <div class="hero__top">
+          <ObjectIcon :status="view.status.value" :size="64" />
 
-          <span class="shot__status" :class="`shot__status--${view.status.value}`">
-            {{ view.status.label }}
-          </span>
+          <div class="intro">
+            <div class="hero__meta">
+              <span class="hero__status" :class="`hero__status--${view.status.value}`">
+                {{ view.status.label }}
+              </span>
 
-          <button v-if="photos.length > 0" type="button" class="shot__more" @click="openPhoto(0)">
-            <AppIcon name="image" />
-            {{ photos.length }} фото
-          </button>
+              <button
+                v-if="photos.length > 0"
+                type="button"
+                class="hero__photos"
+                @click="openPhoto(0)"
+              >
+                <AppIcon name="image" />
+                {{ photos.length }} фото
+              </button>
+            </div>
+
+            <h1 class="display intro__name">{{ view.name }}</h1>
+
+            <p class="intro__addr">
+              <AppIcon name="pin" />
+              <span>{{ view.address }}</span>
+            </p>
+          </div>
         </div>
 
-        <div class="intro">
-          <h1 class="display intro__name">{{ view.name }}</h1>
-
-          <p class="intro__addr">
-            <AppIcon name="pin" />
-            <span>{{ view.address }}</span>
-          </p>
-
-          <p v-if="view.description" class="intro__note">{{ view.description }}</p>
-        </div>
+        <p v-if="view.description" class="intro__note">{{ view.description }}</p>
       </header>
 
       <!-- Готовність — велика смуга, а не сухий рядок: це головне питання. -->
@@ -431,71 +431,69 @@ onBeforeUnmount(() => controller?.abort())
   gap: 16px;
 }
 
-.shot {
-  position: relative;
-  overflow: hidden;
-  aspect-ratio: 21 / 9;
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  background: var(--paper-sunk);
+.hero__top {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 
-.shot__status {
-  position: absolute;
-  top: 14px;
-  left: 14px;
-  padding: 7px 14px;
+.hero__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.hero__status {
+  padding: 5px 12px;
   border-radius: 999px;
-  background: var(--paper-raised);
-  box-shadow: var(--shadow-sm);
+  background: var(--paper-sunk);
   font-size: 12px;
   font-weight: 600;
   color: var(--ink);
 }
 
-.shot__status--in_progress {
+.hero__status--in_progress {
   background: var(--brand);
   color: var(--on-brand);
 }
 
-.shot__status--done {
+.hero__status--done {
   background: var(--ink);
   color: #fff;
 }
 
-.shot__more {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
+.hero__photos {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 15px;
-  border: 0;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
   border-radius: 999px;
-  background: rgb(9 13 10 / 62%);
-  color: #fff;
-  font-size: 12.5px;
+  background: var(--paper-raised);
+  color: var(--ink);
+  font-size: 12px;
   font-weight: 600;
-  backdrop-filter: blur(6px);
   transition:
-    background-color 0.18s var(--ease),
+    border-color 0.18s var(--ease),
     transform 0.18s var(--ease);
 }
 
-.shot__more:hover {
-  background: rgb(9 13 10 / 80%);
+.hero__photos:hover {
+  border-color: var(--ink);
   transform: translateY(-1px);
 }
 
-.shot__more :deep(.icon) {
-  width: 15px;
-  height: 15px;
+.hero__photos :deep(.icon) {
+  width: 14px;
+  height: 14px;
 }
 
 .intro {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .intro__name {

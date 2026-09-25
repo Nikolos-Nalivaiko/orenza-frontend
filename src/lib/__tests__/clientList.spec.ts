@@ -70,7 +70,6 @@ function makeObject(overrides: Partial<ConstructionObject> = {}): ConstructionOb
     finished_at: '2026-10-14',
     actual_started_at: null,
     actual_finished_at: null,
-    cover: null,
     materials: [],
     services: [service()],
     discount_percent: null,

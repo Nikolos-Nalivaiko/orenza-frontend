@@ -1,6 +1,5 @@
 import type { IconName } from '@/components/ui/icons'
 import { formatAmount, parseAmount } from '@/lib/amount'
-import type { CoverDraft, ObjectCover } from '@/lib/cover'
 import {
   buildPaymentPayload,
   emptyDiscount,
@@ -97,7 +96,6 @@ export interface ConstructionObject {
   finished_at: string | null
   actual_started_at: string | null
   actual_finished_at: string | null
-  cover: ObjectCover | null
   materials: Material[]
   services: Service[]
   /** Знижка обʼєкта — рівно в тому вигляді, у якому її ввели. */
@@ -144,7 +142,6 @@ export interface ObjectForm {
   factStartDate: string
   factEndDate: string
   status: ObjectStatus
-  cover: CoverDraft | null
   /** Позиції матеріалів — другий блок картки. */
   materials: MaterialForm[]
   /** Роботи по обʼєкту — третій блок картки. */
@@ -174,7 +171,6 @@ export function emptyObjectForm(): ObjectForm {
     factStartDate: '',
     factEndDate: '',
     status: 'planned',
-    cover: null,
     materials: [],
     services: [],
     discount: emptyDiscount(),
