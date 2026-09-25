@@ -8,7 +8,7 @@ import { LEGACY_PHOTOS_KEY, type ObjectPhoto } from '@/lib/photos'
 const uploadMock = vi.hoisted(() =>
   vi.fn<(path: string, form: FormData, options?: UploadOptions) => Promise<unknown>>(),
 )
-const getMock = vi.hoisted(() => vi.fn<(path: string) => Promise<unknown>>())
+const pageMock = vi.hoisted(() => vi.fn<(path: string) => Promise<unknown>>())
 const deleteMock = vi.hoisted(() => vi.fn<(path: string) => Promise<unknown>>())
 
 vi.mock('@/lib/http', async (importOriginal) => {
@@ -17,7 +17,7 @@ vi.mock('@/lib/http', async (importOriginal) => {
   return {
     ...original,
     upload: uploadMock,
-    api: { ...original.api, get: getMock, delete: deleteMock },
+    api: { ...original.api, page: pageMock, delete: deleteMock },
   }
 })
 
@@ -53,6 +53,10 @@ function serverPhoto(id: number, takenAt: string | null = null): ObjectPhoto {
     taken_at: takenAt,
     created_at: `2026-09-${String(id).padStart(2, '0')}T10:00:00Z`,
   }
+}
+
+function page(photos: ObjectPhoto[], nextCursor: string | null = null, total = photos.length) {
+  return { data: photos, meta: { next_cursor: nextCursor, total } }
 }
 
 function jpeg(name: string): File {
@@ -105,7 +109,7 @@ beforeEach(() => {
     }),
   )
   uploadMock.mockReset()
-  getMock.mockReset()
+  pageMock.mockReset()
   deleteMock.mockReset()
 })
 
@@ -115,19 +119,46 @@ afterEach(() => {
 
 describe('photos store', () => {
   it('завантажує список обʼєкта свіжими першими', async () => {
-    getMock.mockResolvedValue([serverPhoto(1), serverPhoto(3), serverPhoto(2)])
+    pageMock.mockResolvedValue(page([serverPhoto(1), serverPhoto(3), serverPhoto(2)]))
 
     const store = usePhotosStore()
 
     await store.fetch(7)
 
-    expect(getMock).toHaveBeenCalledWith('/workspaces/acme/objects/7/photos')
+    expect(pageMock).toHaveBeenCalledWith('/workspaces/acme/objects/7/photos?per_page=48')
     expect(store.photosOf(7).map((photo) => photo.id)).toEqual([3, 2, 1])
     expect(store.isLoaded(7)).toBe(true)
+    expect(store.hasMore(7)).toBe(false)
+    expect(store.totalOf(7)).toBe(3)
+  })
+
+  it('догружає наступну сторінку за курсором без дублікатів', async () => {
+    pageMock
+      .mockResolvedValueOnce(page([serverPhoto(9), serverPhoto(8)], 'next-8', 4))
+      .mockResolvedValueOnce(page([serverPhoto(8), serverPhoto(7), serverPhoto(6)], null, 4))
+
+    const store = usePhotosStore()
+
+    await store.fetch(7)
+
+    expect(store.hasMore(7)).toBe(true)
+    expect(store.totalOf(7)).toBe(4)
+
+    await store.loadMore(7)
+
+    expect(pageMock).toHaveBeenLastCalledWith(
+      '/workspaces/acme/objects/7/photos?per_page=48&cursor=next-8',
+    )
+    expect(store.photosOf(7).map((photo) => photo.id)).toEqual([9, 8, 7, 6])
+    expect(store.hasMore(7)).toBe(false)
+
+    await store.loadMore(7)
+
+    expect(pageMock).toHaveBeenCalledTimes(2)
   })
 
   it('вантажить файли в черзі й додає готові фото в галерею', async () => {
-    getMock.mockResolvedValue([])
+    pageMock.mockResolvedValue(page([], null, 0))
     uploadMock.mockImplementation(async (_path, form, options) => {
       options?.onProgress?.(0.5)
 
@@ -148,6 +179,7 @@ describe('photos store', () => {
     expect(sentForm(0).get('taken_at')).toBe('2026-08-20T08:00:00.000Z')
     expect(store.uploadsOf(7)).toHaveLength(0)
     expect(store.photosOf(7).map((photo) => photo.id)).toEqual([5, 4])
+    expect(store.totalOf(7)).toBe(2)
   })
 
   it('не пускає в чергу не зображення', () => {
@@ -234,7 +266,7 @@ describe('photos store', () => {
   })
 
   it('видаляє фото з сервера й зі списку', async () => {
-    getMock.mockResolvedValue([serverPhoto(1), serverPhoto(2)])
+    pageMock.mockResolvedValue(page([serverPhoto(1), serverPhoto(2)], 'next-1', 5))
     deleteMock.mockResolvedValue(null)
 
     const store = usePhotosStore()
@@ -244,5 +276,6 @@ describe('photos store', () => {
     await expect(store.remove(7, 1)).resolves.toBe(true)
     expect(deleteMock).toHaveBeenCalledWith('/workspaces/acme/objects/7/photos/1')
     expect(store.photosOf(7).map((photo) => photo.id)).toEqual([2])
+    expect(store.totalOf(7)).toBe(4)
   })
 })

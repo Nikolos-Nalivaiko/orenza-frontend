@@ -41,6 +41,7 @@ export const PHOTO_SERVER_MAX_SIDE = 8000
 export const PHOTO_UPLOAD_SIDE = 2560
 export const PHOTO_MIN_SIDE = 200
 export const PHOTO_STRIP = 8
+export const PHOTO_PAGE = 48
 export const PHOTO_PARALLEL_UPLOADS = 2
 
 export function photoMoment(photo: Pick<ObjectPhoto, 'taken_at' | 'created_at'>): string | null {

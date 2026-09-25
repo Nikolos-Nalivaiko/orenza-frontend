@@ -205,7 +205,7 @@ function toggleStatus(status: EmployeeStatusFilter): void {
     color 0.16s var(--ease);
 }
 
-.chip:hover {
+.chip:hover:not(.chip--on) {
   border-color: var(--line-strong);
   color: var(--ink);
 }

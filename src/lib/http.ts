@@ -78,6 +78,13 @@ async function parse(response: Response): Promise<unknown> {
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  return (await requestEnvelope<T>(path, options))?.data as T
+}
+
+async function requestEnvelope<T>(
+  path: string,
+  options: RequestOptions,
+): Promise<ApiEnvelope<T> | null> {
   const { method = 'GET', body, signal } = options
 
   const headers: Record<string, string> = { Accept: 'application/json' }
@@ -118,7 +125,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     throw errorFrom(response.status, payload)
   }
 
-  return (payload as ApiEnvelope<T> | null)?.data as T
+  return payload as ApiEnvelope<T> | null
 }
 
 function errorFrom(status: number, payload: unknown): ApiError {
@@ -222,9 +229,23 @@ export function upload<T>(path: string, form: FormData, options: UploadOptions =
   })
 }
 
+export interface ApiPage<T> {
+  data: T[]
+  meta: Record<string, unknown>
+}
+
 export const api = {
   get: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}): Promise<T> =>
     request<T>(path, { ...options, method: 'GET' }),
+
+  page: async <T>(
+    path: string,
+    options: Omit<RequestOptions, 'method' | 'body'> = {},
+  ): Promise<ApiPage<T>> => {
+    const envelope = await requestEnvelope<T[]>(path, { ...options, method: 'GET' })
+
+    return { data: envelope?.data ?? [], meta: envelope?.meta ?? {} }
+  },
 
   post: <T>(
     path: string,

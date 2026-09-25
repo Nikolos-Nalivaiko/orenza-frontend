@@ -2,12 +2,13 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useProgressStore } from './progress'
 import { useWorkspacesStore } from './workspaces'
-import { api, ApiError, upload as uploadForm } from '@/lib/http'
+import { api, ApiError, upload as uploadForm, type ApiPage } from '@/lib/http'
 import { ImageDecodeError, prepareImageUpload } from '@/lib/image'
 import {
   dataUrlToFile,
   LEGACY_PHOTOS_KEY,
   parseLegacyPhotos,
+  PHOTO_PAGE,
   PHOTO_PARALLEL_UPLOADS,
   PHOTO_SERVER_MAX_SIDE,
   PHOTO_UPLOAD_SIDE,
@@ -76,7 +77,10 @@ export const usePhotosStore = defineStore('photos', () => {
   const progress = useProgressStore()
 
   const byObject = ref<Record<number, ObjectPhoto[]>>({})
+  const cursors = ref<Record<number, string | null>>({})
+  const totals = ref<Record<number, number>>({})
   const loading = ref<Record<number, boolean>>({})
+  const loadingMore = ref<Record<number, boolean>>({})
   const errors = ref<Record<number, string | null>>({})
   const removing = ref<Record<number, boolean>>({})
   const uploads = ref<PhotoUpload[]>([])
@@ -96,6 +100,43 @@ export const usePhotosStore = defineStore('photos', () => {
 
   function isLoaded(objectId: number): boolean {
     return byObject.value[objectId] !== undefined
+  }
+
+  function totalOf(objectId: number): number {
+    return Math.max(totals.value[objectId] ?? 0, photosOf(objectId).length)
+  }
+
+  function hasMore(objectId: number): boolean {
+    return typeof cursors.value[objectId] === 'string'
+  }
+
+  function setTotal(objectId: number, total: number): void {
+    totals.value = { ...totals.value, [objectId]: Math.max(0, total) }
+  }
+
+  function pageQuery(cursor: string | null): string {
+    const query = new URLSearchParams({ per_page: String(PHOTO_PAGE) })
+
+    if (cursor !== null) {
+      query.set('cursor', cursor)
+    }
+
+    return query.toString()
+  }
+
+  function applyPage(objectId: number, page: ApiPage<ObjectPhoto>, merge: boolean): void {
+    const known = merge ? photosOf(objectId) : []
+    const ids = new Set(known.map((photo) => photo.id))
+    const fresh = page.data.filter((photo) => !ids.has(photo.id))
+    const next = page.meta.next_cursor
+    const total = page.meta.total
+
+    byObject.value = { ...byObject.value, [objectId]: sortPhotos([...known, ...fresh]) }
+    cursors.value = { ...cursors.value, [objectId]: typeof next === 'string' ? next : null }
+
+    if (typeof total === 'number') {
+      setTotal(objectId, total)
+    }
   }
 
   function uploadsOf(objectId: number): PhotoUpload[] {
@@ -123,15 +164,44 @@ export const usePhotosStore = defineStore('photos', () => {
     setError(objectId, null)
 
     try {
-      const list = await progress.track(api.get<ObjectPhoto[]>(path))
+      const page = await progress.track(api.page<ObjectPhoto>(`${path}?${pageQuery(null)}`))
 
       if (basePath(objectId) === path) {
-        byObject.value = { ...byObject.value, [objectId]: sortPhotos(list) }
+        applyPage(objectId, page, false)
       }
     } catch (cause) {
       setError(objectId, messageFor(cause, 'Не вдалося завантажити фото.'))
     } finally {
       loading.value = { ...loading.value, [objectId]: false }
+    }
+  }
+
+  async function loadMore(objectId: number): Promise<void> {
+    const path = basePath(objectId)
+    const cursor = cursors.value[objectId]
+
+    if (
+      path === null ||
+      typeof cursor !== 'string' ||
+      loading.value[objectId] === true ||
+      loadingMore.value[objectId] === true
+    ) {
+      return
+    }
+
+    loadingMore.value = { ...loadingMore.value, [objectId]: true }
+    setError(objectId, null)
+
+    try {
+      const page = await progress.track(api.page<ObjectPhoto>(`${path}?${pageQuery(cursor)}`))
+
+      if (basePath(objectId) === path && cursors.value[objectId] === cursor) {
+        applyPage(objectId, page, true)
+      }
+    } catch (cause) {
+      setError(objectId, messageFor(cause, 'Не вдалося завантажити фото.'))
+    } finally {
+      loadingMore.value = { ...loadingMore.value, [objectId]: false }
     }
   }
 
@@ -275,6 +345,7 @@ export const usePhotosStore = defineStore('photos', () => {
           ...byObject.value,
           [item.objectId]: sortPhotos([...photosOf(item.objectId), photo]),
         }
+        setTotal(item.objectId, (totals.value[item.objectId] ?? 0) + 1)
       }
 
       if (item.legacyId !== null) {
@@ -330,6 +401,7 @@ export const usePhotosStore = defineStore('photos', () => {
         ...byObject.value,
         [objectId]: photosOf(objectId).filter((photo) => photo.id !== photoId),
       }
+      setTotal(objectId, (totals.value[objectId] ?? 0) - 1)
 
       return true
     } catch (cause) {
@@ -358,14 +430,21 @@ export const usePhotosStore = defineStore('photos', () => {
 
   function forget(objectId: number): void {
     const { [objectId]: _, ...rest } = byObject.value
+    const { [objectId]: __, ...restCursors } = cursors.value
+    const { [objectId]: ___, ...restTotals } = totals.value
 
     byObject.value = rest
+    cursors.value = restCursors
+    totals.value = restTotals
   }
 
   watch(
     () => workspaces.currentId,
     () => {
       byObject.value = {}
+      cursors.value = {}
+      totals.value = {}
+      loadingMore.value = {}
       errors.value = {}
 
       for (const item of uploads.value) {
@@ -383,15 +462,19 @@ export const usePhotosStore = defineStore('photos', () => {
   return {
     byObject,
     loading,
+    loadingMore,
     errors,
     removing,
     uploads,
     legacy,
     photosOf,
     isLoaded,
+    totalOf,
+    hasMore,
     uploadsOf,
     legacyOf,
     fetch,
+    loadMore,
     add,
     retry,
     dismiss,

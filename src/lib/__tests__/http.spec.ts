@@ -130,6 +130,23 @@ describe('request', () => {
   })
 })
 
+describe('api.page', () => {
+  it('повертає і дані, і meta сторінки', async () => {
+    mockFetch(respond({ data: [{ id: 1 }], meta: { next_cursor: 'abc', total: 5 } }))
+
+    await expect(api.page('/photos')).resolves.toEqual({
+      data: [{ id: 1 }],
+      meta: { next_cursor: 'abc', total: 5 },
+    })
+  })
+
+  it('без meta віддає порожній обʼєкт', async () => {
+    mockFetch(respond({ data: [] }))
+
+    await expect(api.page('/photos')).resolves.toEqual({ data: [], meta: {} })
+  })
+})
+
 describe('download', () => {
   it('повертає файл як Blob і підписує запит токеном', async () => {
     const fetchMock = mockFetch(

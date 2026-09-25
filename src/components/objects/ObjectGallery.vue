@@ -23,11 +23,13 @@ const uploads = computed(() => store.uploadsOf(props.objectId))
 const legacy = computed(() => store.legacyOf(props.objectId))
 const loaded = computed(() => store.isLoaded(props.objectId))
 const loading = computed(() => store.loading[props.objectId] === true)
+const loadingMore = computed(() => store.loadingMore[props.objectId] === true)
+const more = computed(() => store.hasMore(props.objectId))
 const error = computed(() => store.errors[props.objectId] ?? null)
 
 const viewerPhotos = computed(() => photos.value.map(toViewerPhoto))
 
-const total = computed(() => photos.value.length)
+const total = computed(() => store.totalOf(props.objectId))
 const pending = computed(() => uploads.value.filter((item) => item.status !== 'failed').length)
 
 const visible = computed(() =>
@@ -36,7 +38,7 @@ const visible = computed(() =>
     : photos.value.slice(0, Math.max(0, PHOTO_STRIP - uploads.value.length)),
 )
 
-const hidden = computed(() => photos.value.length - visible.value.length)
+const hidden = computed(() => Math.max(0, total.value - visible.value.length))
 
 const empty = computed(
   () => loaded.value && photos.value.length === 0 && uploads.value.length === 0,
@@ -138,6 +140,12 @@ function uploadLabel(item: PhotoUpload): string {
 function dayOf(at: string | null): string {
   return at === null ? '' : formatMomentDay(at, props.today)
 }
+
+watch(viewing, (index) => {
+  if (index !== null && more.value && index >= photos.value.length - 3) {
+    void store.loadMore(props.objectId)
+  }
+})
 
 watch(
   () => props.objectId,
@@ -321,6 +329,19 @@ onBeforeUnmount(() => window.removeEventListener('paste', onPaste))
         </button>
       </li>
 
+      <li v-if="expanded && more" class="shot shot--more">
+        <button
+          type="button"
+          class="shot__frame more"
+          :disabled="loadingMore"
+          :aria-busy="loadingMore"
+          @click="store.loadMore(objectId)"
+        >
+          <AppIcon name="image" />
+          <span>{{ loadingMore ? 'Завантажуємо…' : 'Показати ще' }}</span>
+        </button>
+      </li>
+
       <li v-if="!expanded" class="shot shot--add">
         <button type="button" class="shot__frame add" @click="picker?.click()">
           <AppIcon name="plus" />
@@ -331,7 +352,12 @@ onBeforeUnmount(() => window.removeEventListener('paste', onPaste))
 
     <p v-if="error" class="gal__bad" role="alert">
       <span>{{ error }}</span>
-      <button v-if="!loaded" type="button" class="gal__retry" @click="store.fetch(objectId)">
+      <button
+        v-if="!loaded || more"
+        type="button"
+        class="gal__retry"
+        @click="loaded ? store.loadMore(objectId) : store.fetch(objectId)"
+      >
         Спробувати ще
       </button>
     </p>
@@ -711,6 +737,38 @@ onBeforeUnmount(() => window.removeEventListener('paste', onPaste))
   border-color: var(--brand);
   background: var(--brand-tint);
   color: var(--brand-strong);
+}
+
+.more {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 6px;
+  border: 1px dashed var(--line-strong);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  transition:
+    border-color 0.18s var(--ease),
+    background-color 0.18s var(--ease),
+    color 0.18s var(--ease);
+}
+
+.more :deep(.icon) {
+  width: 18px;
+  height: 18px;
+}
+
+.more:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+  color: var(--brand-strong);
+}
+
+.more:disabled {
+  cursor: progress;
+  opacity: 0.7;
 }
 
 .drop {
